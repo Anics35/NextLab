@@ -3,9 +3,15 @@ require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
 const activityRoutes = require("./routes/activityRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 const authRoutes = require("./routes/authRoutes");
 const codeRoutes = require("./routes/codeRoutes");
+const courseRoutes = require("./routes/courseRoutes");
+const examAttemptRoutes = require("./routes/examAttemptRoutes");
+const examRoutes = require("./routes/examRoutes");
 const problemRoutes = require("./routes/problemRoutes");
+const proctorRoutes = require("./routes/proctorRoutes");
+const resultRoutes = require("./routes/resultRoutes");
 const submissionRoutes = require("./routes/submissionRoutes");
 
 const app = express();
@@ -19,9 +25,18 @@ app.get("/health", (req, res) => {
 
 app.use("/auth", authRoutes);
 app.use("/", codeRoutes);
+app.use("/course", courseRoutes);
+app.use("/courses", courseRoutes);
+app.use("/exam", examRoutes);
+app.use("/exams", examRoutes);
+app.use("/exam-attempts", examAttemptRoutes);
 app.use("/problems", problemRoutes);
+app.use("/proctor", proctorRoutes);
 app.use("/submissions", submissionRoutes);
 app.use("/activity", activityRoutes);
+app.use("/analytics", analyticsRoutes);
+app.use("/result", resultRoutes);
+app.use("/results", resultRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

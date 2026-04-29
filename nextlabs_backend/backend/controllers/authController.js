@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const { hashPassword, signToken, verifyPassword } = require("../services/auth");
+const { createActiveSession } = require("../services/sessionService");
 const { createApiError } = require("../utils/apiError");
 const { isBlank } = require("../utils/validators");
 
@@ -44,7 +45,8 @@ async function register(req, res, next) {
       role
     });
 
-    res.status(201).json(toAuthResponse(user, signToken(user)));
+    const sessionToken = await createActiveSession(user._id);
+    res.status(201).json(toAuthResponse(user, signToken(user, sessionToken)));
   } catch (error) {
     next(error);
   }
@@ -63,7 +65,8 @@ async function login(req, res, next) {
       throw createApiError(401, "Invalid email or password", "INVALID_CREDENTIALS");
     }
 
-    res.json(toAuthResponse(user, signToken(user)));
+    const sessionToken = await createActiveSession(user._id);
+    res.json(toAuthResponse(user, signToken(user, sessionToken)));
   } catch (error) {
     next(error);
   }

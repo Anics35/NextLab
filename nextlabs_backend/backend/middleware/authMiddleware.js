@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const { verifyToken } = require("../services/auth");
+const { assertActiveSession, touchSession } = require("../services/sessionService");
 const { createApiError } = require("../utils/apiError");
 
 async function authenticate(req, res, next) {
@@ -12,6 +13,11 @@ async function authenticate(req, res, next) {
     }
 
     const payload = verifyToken(token);
+    const sessionIsActive = await assertActiveSession(payload.sub, payload.sessionToken);
+    if (!sessionIsActive) {
+      throw createApiError(401, "This login session is no longer active", "SESSION_EXPIRED");
+    }
+
     const user = await User.findById(payload.sub).select("-passwordHash");
 
     if (!user) {
@@ -24,6 +30,8 @@ async function authenticate(req, res, next) {
       email: user.email,
       role: user.role
     };
+
+    await touchSession(req.user.id, payload.sessionToken);
 
     next();
   } catch (error) {

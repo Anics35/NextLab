@@ -38,7 +38,7 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(originalHash, "hex"));
 }
 
-function signToken(user) {
+function signToken(user, sessionToken = undefined) {
   const header = { alg: "HS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -46,6 +46,7 @@ function signToken(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    sessionToken,
     iat: now,
     exp: now + TOKEN_TTL_SECONDS
   };
