@@ -1,130 +1,185 @@
 import React, { useState } from 'react';
-import { createProblem } from '../services/codeService';
+import { toast } from 'react-hot-toast';
+import { Plus, Trash2, Save, FileCode2, Eye, EyeOff, LayoutTemplate } from 'lucide-react';
 
-const ProblemCreator = ({ onProblemAdded }) => {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    difficulty: 'easy',
-    testCases: [{ input: '', expectedOutput: '', isPublic: true }]
-  });
+function ProblemCreator() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [testCases, setTestCases] = useState([
+    { input: '', expectedOutput: '', isPublic: true }
+  ]);
 
-  const addTestCase = () => {
-    setFormData({
-      ...formData,
-      testCases: [...formData.testCases, { input: '', expectedOutput: '', isPublic: false }]
-    });
+  const handleAddTestCase = () => {
+    setTestCases([...testCases, { input: '', expectedOutput: '', isPublic: false }]);
   };
 
-  const removeTestCase = (index) => {
-    const filtered = formData.testCases.filter((_, i) => i !== index);
-    setFormData({ ...formData, testCases: filtered });
+  const handleRemoveTestCase = (index) => {
+    if (testCases.length === 1) {
+      toast.error("You must have at least one test case.");
+      return;
+    }
+    const updated = testCases.filter((_, i) => i !== index);
+    setTestCases(updated);
   };
 
-  const handleTestChange = (index, field, value) => {
-    const newTests = [...formData.testCases];
-    newTests[index][field] = value;
-    setFormData({ ...formData, testCases: newTests });
+  const handleTestCaseChange = (index, field, value) => {
+    const updated = [...testCases];
+    updated[index][field] = value;
+    setTestCases(updated);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSaveProblem = async () => {
+    if (!title.trim() || !description.trim()) {
+      toast.error("Title and Description are required.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await createProblem(formData);
-      alert("Nexus Database Updated: Challenge Deployed.");
-      onProblemAdded();
-      setFormData({ 
-        title: '', 
-        description: '', 
-        difficulty: 'easy', 
-        testCases: [{ input: '', expectedOutput: '', isPublic: true }] 
+      const token = localStorage.getItem('token');
+      // Replace this URL with your actual backend endpoint if different
+      const response = await fetch('http://localhost:5001/api/problems', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          testCases
+        })
       });
-    } catch (err) { 
-      alert("Sync Failed: " + (err.response?.data?.error || "Check Schema configuration.")); 
+
+      if (!response.ok) throw new Error("Failed to save problem");
+
+      toast.success("Exam Problem Created Successfully!");
+      setTitle('');
+      setDescription('');
+      setTestCases([{ input: '', expectedOutput: '', isPublic: true }]);
+      
+    } catch (error) {
+      toast.error(error.message || "Could not save problem.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div style={styles.card}>
-      <header style={styles.cardHeader}>
-        <div style={styles.headerDot}></div>
-        <h3 style={styles.title}>Challenge Architect</h3>
-      </header>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <FileCode2 color="#ffa116" size={20} />
+          <h2 style={styles.title}>Exam Builder</h2>
+        </div>
+        <button onClick={handleSaveProblem} disabled={isSubmitting} style={styles.saveBtn}>
+          <Save size={14} /> {isSubmitting ? 'Saving...' : 'Publish Exam'}
+        </button>
+      </div>
 
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>PROBLEM TITLE</label>
-          <input style={styles.input} placeholder="e.g. Reverse an Array" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
+      <div style={styles.formGrid}>
+        {/* LEFT COLUMN: PROBLEM DETAILS */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}><LayoutTemplate size={14} /> Problem Specification</div>
+          <div style={styles.cardBody}>
+            <label style={styles.label}>Problem Title</label>
+            <input 
+              style={styles.input} 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              placeholder="e.g., Two Sum, Reverse Linked List..." 
+            />
+
+            <label style={styles.label}>Problem Description</label>
+            <textarea 
+              style={styles.textarea} 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)} 
+              placeholder="Clearly explain the problem, constraints, and edge cases..." 
+            />
+          </div>
         </div>
 
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>DESCRIPTION</label>
-          <textarea style={styles.textarea} placeholder="Describe the logic and constraints..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
-        </div>
-        
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>DIFFICULTY</label>
-          <select style={styles.select} value={formData.difficulty} onChange={e => setFormData({...formData, difficulty: e.target.value})}>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </div>
-
-        <div style={styles.testHeader}>
-          <label style={styles.label}>TEST ENGINE CONFIG</label>
-          <button type="button" onClick={addTestCase} style={styles.btnSmall}>+ Add Case</button>
-        </div>
-
-        <div style={styles.testList}>
-          {formData.testCases.map((tc, i) => (
-            <div key={i} style={styles.testRow}>
-              <div style={styles.testMeta}>
-                <span style={styles.testIndex}>#{i + 1}</span>
-                <input 
-                  type="checkbox" 
-                  checked={tc.isPublic} 
-                  onChange={e => handleTestChange(i, 'isPublic', e.target.checked)} 
-                />
-                <span style={{ fontSize: '9px', color: tc.isPublic ? '#007bff' : '#444' }}>{tc.isPublic ? 'PUB' : 'HID'}</span>
-              </div>
-              <div style={styles.testInputs}>
-                <input style={styles.minInput} placeholder="Input" value={tc.input} onChange={e => handleTestChange(i, 'input', e.target.value)} />
-                <input style={styles.minInput} placeholder="Output" value={tc.expectedOutput} onChange={e => handleTestChange(i, 'expectedOutput', e.target.value)} required />
-              </div>
-              {formData.testCases.length > 1 && (
-                <button type="button" onClick={() => removeTestCase(i)} style={styles.btnDel}>×</button>
-              )}
+        {/* RIGHT COLUMN: TEST CASES */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>
+            <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+               <FileCode2 size={14} /> Test Case Manager
             </div>
-          ))}
+            <button onClick={handleAddTestCase} style={styles.addBtn}><Plus size={12} /> Add Case</button>
+          </div>
+          
+          <div style={styles.testCaseList}>
+            {testCases.map((tc, idx) => (
+              <div key={idx} style={styles.testCaseItem}>
+                <div style={styles.tcHeader}>
+                  <span style={styles.tcTitle}>Test Case #{idx + 1}</span>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      onClick={() => handleTestCaseChange(idx, 'isPublic', !tc.isPublic)}
+                      style={{ ...styles.toggleBtn, color: tc.isPublic ? '#2cbb5d' : '#888' }}
+                      title={tc.isPublic ? "Public (Visible to student)" : "Hidden (Used for grading)"}
+                    >
+                      {tc.isPublic ? <Eye size={14} /> : <EyeOff size={14} />} 
+                      <span style={{fontSize: '10px'}}>{tc.isPublic ? 'Public' : 'Hidden'}</span>
+                    </button>
+                    <button onClick={() => handleRemoveTestCase(idx)} style={styles.deleteBtn}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div style={styles.tcBody}>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>Standard Input</label>
+                    <textarea 
+                      style={styles.tcInput} 
+                      value={tc.input} 
+                      onChange={(e) => handleTestCaseChange(idx, 'input', e.target.value)}
+                      placeholder="Input variables..."
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>Expected Output</label>
+                    <textarea 
+                      style={styles.tcInput} 
+                      value={tc.expectedOutput} 
+                      onChange={(e) => handleTestCaseChange(idx, 'expectedOutput', e.target.value)}
+                      placeholder="Exact output string..."
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <button type="submit" style={styles.btnSubmit}>Deploy to NexLab</button>
-      </form>
+      </div>
     </div>
   );
-};
+}
 
 const styles = {
-  card: { backgroundColor: '#0f0f0f', padding: '24px', borderRadius: '16px', border: '1px solid #222' },
-  cardHeader: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' },
-  headerDot: { width: '8px', height: '8px', backgroundColor: '#007bff', borderRadius: '50%', boxShadow: '0 0 10px #007bff' },
-  title: { fontSize: '12px', fontWeight: '800', color: '#fff', letterSpacing: '1px' },
-  form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '9px', fontWeight: '900', color: '#444', letterSpacing: '1px' },
-  input: { padding: '12px', backgroundColor: '#161616', border: '1px solid #222', color: '#fff', borderRadius: '8px', outline: 'none' },
-  textarea: { padding: '12px', backgroundColor: '#161616', border: '1px solid #222', color: '#fff', borderRadius: '8px', height: '80px', outline: 'none', resize: 'none' },
-  select: { padding: '10px', backgroundColor: '#161616', color: '#fff', border: '1px solid #222', borderRadius: '8px' },
-  testHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' },
-  btnSmall: { padding: '4px 10px', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#007bff', borderRadius: '6px', fontSize: '10px', cursor: 'pointer' },
-  testList: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  testRow: { display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#161616', padding: '10px', borderRadius: '10px', border: '1px solid #222' },
-  testMeta: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '40px' },
-  testIndex: { fontSize: '10px', color: '#333', fontWeight: 'bold' },
-  testInputs: { flex: 1, display: 'flex', gap: '8px' },
-  minInput: { flex: 1, padding: '8px', backgroundColor: '#000', color: '#4ade80', border: '1px solid #111', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' },
-  btnDel: { background: 'none', border: 'none', color: '#444', fontSize: '18px', cursor: 'pointer' },
-  btnSubmit: { padding: '14px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }
+  container: { height: '100%', display: 'flex', flexDirection: 'column', gap: '15px' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#282828', padding: '15px 20px', borderRadius: '8px', border: '1px solid #333' },
+  title: { margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#eff1f6' },
+  saveBtn: { backgroundColor: '#2cbb5d', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' },
+  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', flex: 1, overflow: 'hidden' },
+  card: { backgroundColor: '#282828', borderRadius: '8px', border: '1px solid #333', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  cardHeader: { backgroundColor: '#33333366', padding: '12px 15px', borderBottom: '1px solid #333', fontSize: '11px', fontWeight: 'bold', color: '#aaa', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  cardBody: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px', flex: 1 },
+  label: { fontSize: '11px', fontWeight: 'bold', color: '#888', textTransform: 'uppercase', marginBottom: '5px', display: 'block' },
+  input: { backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '6px', padding: '10px', color: '#eff1f6', fontSize: '13px', width: '100%', outline: 'none' },
+  textarea: { backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '6px', padding: '10px', color: '#eff1f6', fontSize: '13px', width: '100%', outline: 'none', flex: 1, resize: 'none', fontFamily: 'monospace' },
+  addBtn: { backgroundColor: '#ffa11622', color: '#ffa116', border: '1px solid #ffa11644', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' },
+  testCaseList: { padding: '15px', display: 'flex', flexDirection: 'column', gap: '15px', overflowY: 'auto', flex: 1 },
+  testCaseItem: { backgroundColor: '#1e1e1e', border: '1px solid #444', borderRadius: '8px', overflow: 'hidden' },
+  tcHeader: { backgroundColor: '#111', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' },
+  tcTitle: { fontSize: '12px', fontWeight: 'bold', color: '#ffa116' },
+  tcBody: { padding: '15px', display: 'flex', gap: '10px' },
+  tcInput: { backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '4px', padding: '8px', color: '#fff', fontSize: '12px', width: '100%', height: '80px', resize: 'none', fontFamily: 'monospace', outline: 'none' },
+  deleteBtn: { background: 'none', border: 'none', color: '#ff5f56', cursor: 'pointer', display: 'flex', alignItems: 'center' },
+  toggleBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }
 };
 
 export default ProblemCreator;

@@ -14,7 +14,6 @@ function getState(studentId) {
       lastHeartbeatAt: Date.now()
     });
   }
-
   return studentState.get(studentId);
 }
 
@@ -24,17 +23,21 @@ function pruneRecent(timestamps, windowMs) {
 }
 
 async function saveEvent(io, payload) {
-  const event = await ActivityEvent.create(payload);
-  io.emit("student_update", event);
+  try {
+    const event = await ActivityEvent.create(payload);
+    io.emit("student_update", event);
 
-  if (payload.severity === "warning") {
-    io.emit("alert_event", event);
+    if (payload.severity === "warning") {
+      io.emit("alert_event", event);
+    }
+    return event;
+  } catch (error) {
+    console.error("Activity DB Save Error:", error);
   }
-
-  return event;
 }
 
 async function handleStudentEvent(io, socket, type, payload = {}) {
+  // Only track students
   if (!socket.user || socket.user.role !== "student") {
     return;
   }
@@ -44,9 +47,11 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
   let severity = "info";
   let message = "";
 
+  // 🔴 FIX: Recognize the exact events your frontend is sending (copy, paste, contextmenu, shortcut_c, etc.)
+  const isViolation = ["tab_switch", "copy", "paste", "contextmenu", "fullscreen_exit", "copy_attempt", "paste_attempt"].includes(type) || type.startsWith("shortcut_");
+
   if (type === "run_clicked") {
     state.runs = pruneRecent([...state.runs, Date.now()], 60 * 1000);
-
     if (state.runs.length >= 8) {
       severity = "warning";
       message = "Frequent runs detected";
@@ -55,29 +60,37 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
 
   if (type === "tab_switch") {
     state.tabSwitches = pruneRecent([...state.tabSwitches, Date.now()], 5 * 60 * 1000);
-
     if (state.tabSwitches.length >= 3) {
       severity = "warning";
       message = "Multiple tab switches detected";
     }
   }
 
-  if (["copy_attempt", "paste_attempt", "fullscreen_exit"].includes(type)) {
-    severity = "warning";
-    message = `Proctoring violation: ${type}`;
-  }
-
   if (type === "heartbeat") {
     const now = Date.now();
     const idleMs = now - state.lastHeartbeatAt;
     state.lastHeartbeatAt = now;
-
     if (idleMs > 45 * 1000) {
       severity = "warning";
       message = "Student appears idle";
     }
   }
 
+  // 🔴 FIX: If it's a violation, ALWAYS alert the Teacher Dashboard instantly, regardless of examId
+  if (isViolation) {
+    severity = "warning";
+    message = `Proctoring violation: ${type}`;
+    
+    // Broadcast the exact shape the TeacherDashboard.jsx expects
+    io.emit("proctor_alert", {
+      studentId: studentId,
+      studentName: socket.user.name,
+      type: type,
+      time: new Date().toLocaleTimeString()
+    });
+  }
+
+  // Save the event log
   const event = await saveEvent(io, {
     studentId,
     type,
@@ -94,40 +107,39 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
     io.emit("submission_event", event);
   }
 
-  if (["tab_switch", "copy_attempt", "paste_attempt", "fullscreen_exit"].includes(type) && payload.examId) {
-    const update = {
-      $push: {
-        violations: {
-          type,
-          timestamp: new Date(),
-          meta: payload
+  // 🔴 FIX: Keep the DB Exam Tracking isolated so it doesn't block the live UI alert
+  if (isViolation && payload.examId) {
+    try {
+      const update = {
+        $push: {
+          violations: { type, timestamp: new Date(), meta: payload }
         }
+      };
+
+      if (type === "tab_switch") {
+        update.$inc = { tabSwitchCount: 1 };
       }
-    };
 
-    if (type === "tab_switch") {
-      update.$inc = { tabSwitchCount: 1 };
+      const attempt = await ExamAttempt.findOneAndUpdate(
+        { examId: payload.examId, studentId, status: "ongoing" },
+        update,
+        { new: true }
+      );
+
+      const limit = Number(process.env.PROCTOR_VIOLATION_LIMIT || 0);
+      if (attempt && limit > 0 && attempt.violations.length >= limit) {
+        attempt.status = "auto-submitted";
+        attempt.endTime = new Date();
+        await attempt.save();
+        socket.emit("exam_end", {
+          examId: payload.examId,
+          attemptId: String(attempt._id),
+          reason: "violation_limit"
+        });
+      }
+    } catch (err) {
+      console.error("Exam Attempt Update Error:", err);
     }
-
-    const attempt = await ExamAttempt.findOneAndUpdate(
-      { examId: payload.examId, studentId, status: "ongoing" },
-      update,
-      { new: true }
-    );
-
-    const limit = Number(process.env.PROCTOR_VIOLATION_LIMIT || 0);
-    if (attempt && limit > 0 && attempt.violations.length >= limit) {
-      attempt.status = "auto-submitted";
-      attempt.endTime = new Date();
-      await attempt.save();
-      socket.emit("exam_end", {
-        examId: payload.examId,
-        attemptId: String(attempt._id),
-        reason: "violation_limit"
-      });
-    }
-
-    io.emit("proctor_alert", event);
   }
 }
 
@@ -147,6 +159,7 @@ function initSocket(httpServer) {
       const payload = verifyToken(token);
       const sessionActive = await bindSocketSession(payload.sub, payload.sessionToken, socket.id);
 
+      // Handle strict sessions
       if (!sessionActive && process.env.SESSION_STRICT === "true") {
         socket.disconnect(true);
         return;
@@ -158,19 +171,23 @@ function initSocket(httpServer) {
         email: payload.email,
         role: payload.role
       };
+      
       socket.join(`user:${payload.sub}`);
+      console.log(`✅ [${socket.user.role}] connected: ${socket.user.name}`);
+
     } catch (error) {
       socket.disconnect(true);
       return;
     }
 
+    // 🔴 FIX: Properly route the exact event names the Frontend uses
     socket.on("run_clicked", (payload) => handleStudentEvent(io, socket, "run_clicked", payload));
     socket.on("submit_clicked", (payload) => handleStudentEvent(io, socket, "submit_clicked", payload));
-    socket.on("tab_switch", (payload) => handleStudentEvent(io, socket, "tab_switch", payload));
-    socket.on("copy_attempt", (payload) => handleStudentEvent(io, socket, "copy_attempt", payload));
-    socket.on("paste_attempt", (payload) => handleStudentEvent(io, socket, "paste_attempt", payload));
-    socket.on("fullscreen_exit", (payload) => handleStudentEvent(io, socket, "fullscreen_exit", payload));
     socket.on("heartbeat", (payload) => handleStudentEvent(io, socket, "heartbeat", payload));
+    
+    // Front-end specifically sends these
+    socket.on("tab_switch", (payload) => handleStudentEvent(io, socket, "tab_switch", payload));
+    socket.on("proctor_event", (payload) => handleStudentEvent(io, socket, payload.type, payload)); 
   });
 
   return io;

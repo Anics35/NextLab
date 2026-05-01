@@ -1,4 +1,5 @@
 import api from './api';
+import { disconnectSocket } from './socket';
 
 export const register = async (userData) => {
   // userData should be { name, email, password, role }
@@ -19,8 +20,15 @@ export const login = async (email, password) => {
   return response.data;
 };
 
+// export const logout = () => {
+//   localStorage.removeItem('token');
+//   localStorage.removeItem('user');
+//   window.location.href = '/';
+// };
+
 export const logout = () => {
-  localStorage.removeItem('token');
   localStorage.removeItem('user');
-  window.location.href = '/';
+  localStorage.removeItem('token');
+  disconnectSocket(); // Kill the socket connection instantly
+  window.location.reload(); // Refresh the app to show the login screen
 };
