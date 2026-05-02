@@ -18,13 +18,17 @@ function buildAnalysis({ problem, answer }) {
     approach = "Recursive approach";
   }
 
+  const mistakeHint = failed > 0
+    ? "Likely issues include missed edge cases, incorrect branching, or output formatting mistakes."
+    : "No obvious correctness mistake was observed from available tests.";
+
   return {
     approach,
     timeComplexity: "Not confidently inferred",
     spaceComplexity: "Not confidently inferred",
     verdict: failed > 0
-      ? `Fails ${failed} of ${answer.total} test case(s). Review edge cases and output formatting.`
-      : `Passed all available test cases for ${problem.title}.`,
+      ? `Fails ${failed} of ${answer.total} test case(s). ${mistakeHint}`
+      : `Passed all available test cases for ${problem.title}. ${mistakeHint}`,
     confidence
   };
 }
@@ -45,6 +49,7 @@ function buildPrompt({ problem, answer }) {
     "Do not suggest marks or change scoring.",
     "Return only strict JSON with these keys:",
     "approach, timeComplexity, spaceComplexity, verdict, confidence.",
+    "verdict must mention the primary mistake when the solution is not fully correct.",
     "confidence must be a number from 0 to 100.",
     "",
     `Problem title: ${problem.title}`,

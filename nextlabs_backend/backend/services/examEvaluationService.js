@@ -1,17 +1,9 @@
 const Problem = require("../models/Problem");
 const Submission = require("../models/Submission");
-const { evaluateSubmission } = require("./evaluator");
+const { computeScore, evaluateSubmission } = require("./evaluator");
 const { analyzeSubmission } = require("./aiAnalysisService");
 
-function computeScore(passed, total, marks) {
-  if (!total) {
-    return 0;
-  }
-
-  return Number(((passed / total) * marks).toFixed(2));
-}
-
-async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language, studentId }) {
+async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language, studentId, input = "" }) {
   const problem = await Problem.findById(problemConfig.problemId);
   if (!problem) {
     const error = new Error("Problem not found");
@@ -20,14 +12,24 @@ async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language
     throw error;
   }
 
-  const evaluation = await evaluateSubmission({ code, language, problem });
-  const score = computeScore(evaluation.passed, evaluation.total, problemConfig.marks);
+  const evaluation = await evaluateSubmission({ code, language, problem, visibility: "all" });
+  const score = computeScore(
+    evaluation.totalHidden > 0 ? evaluation.passedHidden : evaluation.passed,
+    evaluation.totalHidden > 0 ? evaluation.totalHidden : evaluation.total,
+    problemConfig.marks
+  );
   const answer = {
     problemId: problem._id,
     code,
     language,
+    input: String(input || ""),
+    output: evaluation.details[0]?.actualOutput || "",
     passed: evaluation.passed,
     total: evaluation.total,
+    passedPublic: evaluation.passedPublic,
+    totalPublic: evaluation.totalPublic,
+    passedHidden: evaluation.passedHidden,
+    totalHidden: evaluation.totalHidden,
     marks: problemConfig.marks,
     score,
     finalScore: score,
@@ -38,23 +40,56 @@ async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language
 
   answer.aiAnalysis = await analyzeSubmission({ problem, answer });
 
-  const submission = await Submission.create({
-    studentId,
+  const testResults = evaluation.details.map((detail) => ({
+    input: String(detail.input || ""),
+    expected: String(detail.expectedOutput || ""),
+    output: String(detail.actualOutput || detail.error || ""),
+    passed: Boolean(detail.passed),
+    isPublic: detail.visibility === "public",
+    error: String(detail.error || "")
+  }));
+
+  let submission = await Submission.findOne({ userId: studentId, examId: exam._id });
+  if (!submission) {
+    submission = await Submission.create({
+      userId: studentId,
+      examId: exam._id,
+      examAttemptId: attempt._id,
+      problems: []
+    });
+  }
+
+  const newProblemData = {
     problemId: problem._id,
-    examId: exam._id,
-    examAttemptId: attempt._id,
     code,
     language,
-    total: evaluation.total,
-    passed: evaluation.passed,
-    failed: evaluation.failed,
-    details: evaluation.details,
-    marks: problemConfig.marks,
+    input: String(input || ""),
+    output: evaluation.details[0]?.actualOutput || "",
     score,
-    finalScore: score,
+    maxMarks: Number(problemConfig.marks || 0),
+    passed: evaluation.passed,
+    total: evaluation.total,
+    passedPublic: evaluation.passedPublic,
+    totalPublic: evaluation.totalPublic,
+    passedHidden: evaluation.passedHidden,
+    totalHidden: evaluation.totalHidden,
+    testResults,
     manualOverride: false,
-    aiAnalysis: answer.aiAnalysis
-  });
+    submittedAt: new Date()
+  };
+
+  const existingIndex = submission.problems.findIndex((item) => String(item.problemId) === String(problem._id));
+  if (existingIndex !== -1) {
+    submission.problems[existingIndex] = newProblemData;
+  } else {
+    submission.problems.push(newProblemData);
+  }
+
+  submission.examAttemptId = attempt._id;
+  await submission.save();
+  console.log("SUBMITTED PROBLEM ID:", String(problem._id));
+  console.log("DB CODE:", code);
+  console.log("SAVED PROBLEMS:", submission.problems.length);
 
   return { answer, evaluation, submission };
 }

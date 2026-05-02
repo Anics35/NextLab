@@ -3,7 +3,7 @@ import { login, register as registerApi } from '../services/authService';
 
 const AuthForm = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'student' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'student', rollNumber: '', semester: '' });
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -44,6 +44,18 @@ const AuthForm = ({ onAuthSuccess }) => {
                   <option value="teacher">Teacher (Admin)</option>
                 </select>
               </div>
+              {formData.role === 'student' && (
+                <>
+                  <input
+                    style={styles.input} type="text" placeholder="Roll Number" required
+                    onChange={(e) => setFormData({...formData, rollNumber: e.target.value})}
+                  />
+                  <input
+                    style={styles.input} type="text" placeholder="Semester" required
+                    onChange={(e) => setFormData({...formData, semester: e.target.value})}
+                  />
+                </>
+              )}
             </>
           )}
           

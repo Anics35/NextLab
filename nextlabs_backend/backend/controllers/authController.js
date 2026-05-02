@@ -12,14 +12,16 @@ function toAuthResponse(user, token) {
       id: String(user._id),
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      rollNumber: user.rollNumber,
+      semester: user.semester
     }
   };
 }
 
 async function register(req, res, next) {
   try {
-    const { name, email, password, role = "student" } = req.body;
+    const { name, email, password, role = "student", rollNumber, semester } = req.body;
 
     if (isBlank(name) || isBlank(email) || isBlank(password)) {
       throw createApiError(400, "name, email and password are required", "MISSING_FIELDS");
@@ -33,6 +35,10 @@ async function register(req, res, next) {
       throw createApiError(400, "role must be student or teacher", "INVALID_ROLE");
     }
 
+    if (role === "student" && (isBlank(rollNumber) || isBlank(semester))) {
+      throw createApiError(400, "rollNumber and semester are required for students", "MISSING_STUDENT_FIELDS");
+    }
+
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       throw createApiError(409, "Email is already registered", "EMAIL_EXISTS");
@@ -42,7 +48,9 @@ async function register(req, res, next) {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       passwordHash: hashPassword(password),
-      role
+      role,
+      rollNumber: role === "student" ? String(rollNumber).trim() : undefined,
+      semester: role === "student" ? String(semester).trim() : undefined
     });
 
     const sessionToken = await createActiveSession(user._id);

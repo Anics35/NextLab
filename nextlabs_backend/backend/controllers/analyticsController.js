@@ -14,6 +14,7 @@ function average(values) {
 async function getExamAnalytics(req, res, next) {
   try {
     const { examId } = req.params;
+    const { semester, dateFrom, dateTo } = req.query;
 
     if (!isValidObjectId(examId)) {
       throw createApiError(400, "examId must be a valid MongoDB ObjectId", "INVALID_EXAM_ID");
@@ -25,15 +26,31 @@ async function getExamAnalytics(req, res, next) {
     }
 
     const attempts = await ExamAttempt.find({ examId })
-      .populate("studentId", "name email")
+      .populate("studentId", "name email rollNumber semester")
       .sort({ updatedAt: -1 });
 
-    const scores = attempts.map((attempt) => attempt.totalScore || 0);
+    const filteredAttempts = attempts.filter((attempt) => {
+      if (semester && String(attempt.studentId?.semester || "") !== String(semester)) {
+        return false;
+      }
+
+      if (dateFrom && new Date(attempt.updatedAt) < new Date(dateFrom)) {
+        return false;
+      }
+
+      if (dateTo && new Date(attempt.updatedAt) > new Date(dateTo)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const scores = filteredAttempts.map((attempt) => attempt.totalScore || 0);
     const problemStats = exam.problems.map((examProblem) => {
       let passed = 0;
       let total = 0;
 
-      attempts.forEach((attempt) => {
+      filteredAttempts.forEach((attempt) => {
         const answer = attempt.answers.find((item) => String(item.problemId) === String(examProblem.problemId._id || examProblem.problemId));
         if (answer && answer.total > 0) {
           total += 1;
@@ -56,11 +73,11 @@ async function getExamAnalytics(req, res, next) {
       success: true,
       analytics: {
         examId,
-        attempts: attempts.length,
+        attempts: filteredAttempts.length,
         averageScore: average(scores),
         highestScore: scores.length ? Math.max(...scores) : 0,
         lowestScore: scores.length ? Math.min(...scores) : 0,
-        students: attempts.map((attempt) => ({
+        students: filteredAttempts.map((attempt) => ({
           student: attempt.studentId,
           status: attempt.status,
           score: attempt.totalScore || 0,

@@ -17,7 +17,7 @@ async function downloadResultPdf(req, res, next) {
     const [exam, student, attempt] = await Promise.all([
       Exam.findById(examId),
       User.findById(studentId).select("-passwordHash"),
-      ExamAttempt.findOne({ examId, studentId })
+      ExamAttempt.findOne({ examId, studentId }).populate("answers.problemId", "title")
     ]);
 
     if (!exam || !student || !attempt) {

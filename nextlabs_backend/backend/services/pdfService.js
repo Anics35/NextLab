@@ -27,6 +27,8 @@ async function buildResultPdf({ student, exam, attempt }) {
 
     doc.fontSize(12);
     addLine(doc, "Student", `${student.name} (${student.email})`);
+    addLine(doc, "Roll Number", student.rollNumber);
+    addLine(doc, "Semester", student.semester);
     addLine(doc, "Exam", exam.title);
     addLine(doc, "Status", attempt.status);
     addLine(doc, "Started", attempt.startTime);
@@ -38,7 +40,7 @@ async function buildResultPdf({ student, exam, attempt }) {
     doc.fontSize(15).text("Problem Scores");
     doc.moveDown(0.5);
     attempt.answers.forEach((answer, index) => {
-      doc.fontSize(12).text(`${index + 1}. Problem ${answer.problemId}`);
+      doc.fontSize(12).text(`${index + 1}. ${answer.problemId?.title || `Problem ${index + 1}`}`);
       addLine(doc, "Passed", `${answer.passed}/${answer.total}`);
       addLine(doc, "Score", `${answer.finalScore || answer.score}/${answer.marks}`);
       doc.moveDown(0.5);
@@ -49,7 +51,7 @@ async function buildResultPdf({ student, exam, attempt }) {
       doc.fontSize(15).text("Violations");
       doc.moveDown(0.5);
       attempt.violations.forEach((violation, index) => {
-        doc.fontSize(12).text(`${index + 1}. ${violation.type} at ${violation.timestamp}`);
+        doc.fontSize(12).text(`${index + 1}. ${violation.type} at ${violation.at || violation.timestamp}`);
       });
     }
 

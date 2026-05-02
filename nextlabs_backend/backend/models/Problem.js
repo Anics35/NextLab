@@ -3,9 +3,16 @@ const mongoose = require("mongoose");
 const testCaseSchema = new mongoose.Schema(
   {
     input: { type: String, default: "" },
+    output: { type: String, required: true, trim: true }
+  },
+  { _id: false }
+);
+
+const legacyTestCaseSchema = new mongoose.Schema(
+  {
+    input: { type: String, default: "" },
     expectedOutput: { type: String, required: true, trim: true },
-    // ADD THIS LINE:
-    isPublic: { type: Boolean, default: false } 
+    isPublic: { type: Boolean, default: false }
   },
   { _id: false }
 );
@@ -19,10 +26,10 @@ const problemSchema = new mongoose.Schema(
       enum: ["easy", "medium", "hard"],
       default: "easy"
     },
-    testCases: {
-      type: [testCaseSchema],
-      validate: [(value) => value.length > 0, "At least one test case is required"]
-    }
+    publicTestCases: { type: [testCaseSchema], default: [] },
+    hiddenTestCases: { type: [testCaseSchema], default: [] },
+    testCases: { type: [legacyTestCaseSchema], default: [] },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true }
   },
   { timestamps: true }
 );

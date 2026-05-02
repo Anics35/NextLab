@@ -10,7 +10,9 @@ const userSchema = new mongoose.Schema(
       enum: ["student", "teacher"],
       default: "student",
       index: true
-    }
+    },
+    rollNumber: { type: String, trim: true, index: true, sparse: true },
+    semester: { type: String, trim: true, sparse: true }
   },
   { timestamps: true }
 );

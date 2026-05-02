@@ -1,23 +1,70 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Editor from '@monaco-editor/react';
-import { toast, Toaster } from 'react-hot-toast';
-import { 
-  ShieldCheck, Play, Send, Layout, LogOut, 
-  Terminal, Code2, BookOpen, ChevronRight
-} from 'lucide-react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Toaster, toast } from 'react-hot-toast';
+import { AlertTriangle, BookOpen, FileText, LogOut, ShieldCheck } from 'lucide-react';
 
-// Services
 import AuthForm from './components/AuthForm';
+import SecureIDE from './components/SecureIDE';
+import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
-import { runCode, submitCode, getProblems } from './services/codeService';
 import { logout } from './services/authService';
-import { socket, initSocket } from './services/socket';
+import { runCode } from './services/codeService';
+import { finalizeExamAttempt, getCourseExams, getExamById, getMyAttempt, saveExamAttempt, startExamAttempt, submitExamAnswer } from './services/api';
+import { emitEvent, initSocket } from './services/socket';
 
 const LANGUAGE_CONFIG = {
-  javascript: { id: 63, label: 'JavaScript', defaultCode: '// Node.js\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf8");\n\nconsole.log(input);' },
-  python: { id: 71, label: 'Python 3', defaultCode: '# Python 3\nimport sys\ninput_data = sys.stdin.read()\nprint(input_data)' },
-  cpp: { id: 54, label: 'C++ (GCC 9.2)', defaultCode: '#include <iostream>\nusing namespace std;\n\nint main() {\n    // Standard I/O ready\n    return 0;\n}' },
-  java: { id: 62, label: 'Java', defaultCode: 'import java.util.Scanner;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n    }\n}' }
+  javascript: { label: 'JavaScript', defaultCode: '// Node.js\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf8");\nconsole.log(input);' },
+  python: { label: 'Python 3', defaultCode: '# Python 3\nimport sys\nprint(sys.stdin.read())' },
+  cpp: { label: 'C++ (GCC 9.2)', defaultCode: '#include <iostream>\nusing namespace std;\nint main() {\n  return 0;\n}' },
+  java: { label: 'Java', defaultCode: 'import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n  }\n}' }
+};
+
+const getProblemId = (problem) => problem?._id || problem?.id;
+const getDefaultLanguage = () => 'javascript';
+const getTimerStorageKey = (examId) => `nextlab_per_problem_remaining_${examId}`;
+
+const getDefaultCode = (problem, language) => {
+  const starterCode = problem?.starterCode;
+  if (starterCode && typeof starterCode === 'object') {
+    return starterCode[language] || starterCode[getDefaultLanguage()] || Object.values(starterCode)[0] || '';
+  }
+  if (typeof starterCode === 'string' && starterCode.trim()) {
+    return starterCode;
+  }
+  return LANGUAGE_CONFIG[language]?.defaultCode || '';
+};
+
+const buildProblemState = (problem, answer) => {
+  const language = answer?.language || getDefaultLanguage();
+  return {
+    language,
+    code: answer?.code || getDefaultCode(problem, language),
+    input: answer?.input || '',
+    output: answer?.output || '',
+    result: answer ? {
+      passedPublic: answer.passedPublic || 0,
+      totalPublic: answer.totalPublic || 0,
+      passedHidden: answer.passedHidden || 0,
+      totalHidden: answer.totalHidden || 0,
+      score: answer.finalScore ?? answer.score ?? 0
+    } : null
+  };
+};
+
+const buildSubmissionMap = (attempt, examProblems) => {
+  const answers = attempt?.answers || [];
+  const map = {};
+  examProblems.forEach((problem, index) => {
+    const problemId = getProblemId(problem);
+    const answer = answers.find((item) => String(item.problemId) === String(problemId));
+    map[problemId] = Boolean(answer?.submittedAt || answer?.total > 0 || answer?.passed > 0 || attempt?.currentProblemIndex > index);
+  });
+  return map;
+};
+
+const getExamDurationSeconds = (exam) => {
+  const duration = Number(exam?.duration ?? exam?.totalDuration ?? 0);
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  return duration > 1000 ? duration : duration * 60;
 };
 
 function App() {
@@ -26,235 +73,415 @@ function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
+  const [activeCourse, setActiveCourse] = useState(null);
+  const [courseExams, setCourseExams] = useState([]);
+  const [courseExamsLoading, setCourseExamsLoading] = useState(false);
+  const [exam, setExam] = useState(null);
   const [problems, setProblems] = useState([]);
-  const [selectedProblem, setSelectedProblem] = useState(null);
-  const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState('');
-  const [output, setOutput] = useState('');
-  const [customInput, setCustomInput] = useState('');
-  const [result, setResult] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
+  const [submissions, setSubmissions] = useState({});
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [attempt, setAttempt] = useState(null);
+  const [problemStates, setProblemStates] = useState({});
+  const [perProblemRemaining, setPerProblemRemaining] = useState({});
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingExam, setIsLoadingExam] = useState(false);
+  const [isExamStarted, setIsExamStarted] = useState(false);
+  const [isExamLocked, setIsExamLocked] = useState(false);
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
-  // 1. Fetch Data & Connect Socket[cite: 2]
+  const autoFinalizeRef = useRef(false);
+  const autoSubmitMapRef = useRef({});
+
+  const currentProblem = problems[currentProblemIndex] || null;
+  const currentProblemId = getProblemId(currentProblem);
+  const currentProblemState = problemStates[currentProblemId] || buildProblemState(currentProblem);
+  const isPerProblemTimer = exam?.timerType === 'per_problem';
+  const currentPerProblemTimeLeft = currentProblemId ? perProblemRemaining[currentProblemId] ?? 0 : 0;
+  const isCurrentProblemLocked = isPerProblemTimer && currentPerProblemTimeLeft <= 0;
+  const examId = exam?._id || null;
+
+  const canShowResults = Boolean(
+    exam?.marksFinalized === true &&
+    (
+      exam?.showResultsImmediately === true ||
+      exam?.resultVisibility === 'immediate' ||
+      exam?.resultsVisible === true
+    )
+  );
+
   useEffect(() => {
-    if (user && user.role === 'student') {
-      const fetchAll = async () => {
-        const data = await getProblems();
-        setProblems(data || []);
-        if (data?.length > 0) setSelectedProblem(data[0]);
-      };
-      fetchAll();
-      initSocket(localStorage.getItem('token'));
-    }
+    if (!user || user.role !== 'student') return;
+    initSocket(localStorage.getItem('token'));
   }, [user]);
 
-  // 2. Load Boilerplate when Problem or Language changes[cite: 2]
   useEffect(() => {
-    if (selectedProblem) {
-      const boilerplate = LANGUAGE_CONFIG[language].defaultCode;
-      setCode(boilerplate);
-      setResult(null);
-      setOutput('');
-    }
-  }, [selectedProblem, language]);
+    const intervalId = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
-  // 3. HARDENED SECURITY: Block Shortcuts (Ctrl+V, etc.)[cite: 2]
-  const handleKeyDown = useCallback((e) => {
-    const forbidden = ['c', 'v', 'x', 'u'];
-    if ((e.ctrlKey || e.metaKey) && forbidden.includes(e.key.toLowerCase())) {
-      e.preventDefault();
-      toast.error(`Security: Ctrl+${e.key.toUpperCase()} blocked`, {
-        style: { background: '#222', color: '#f87171', border: '1px solid #444' }
+  const handleKeyDown = useCallback((event) => {
+    const forbiddenKeys = ['c', 'v', 'x', 'u'];
+    if (isExamStarted && (event.ctrlKey || event.metaKey) && forbiddenKeys.includes(event.key.toLowerCase())) {
+      event.preventDefault();
+      toast.error(`Security: Ctrl+${event.key.toUpperCase()} blocked`);
+      emitEvent('proctor_event', { type: `shortcut_${event.key}`, time: new Date(), examId: exam?._id });
+    }
+  }, [exam?._id, isExamStarted]);
+
+  const resetExamSession = useCallback(() => {
+    autoFinalizeRef.current = false;
+    autoSubmitMapRef.current = {};
+    setExam(null);
+    setProblems([]);
+    setCurrentProblemIndex(0);
+    setSubmissions({});
+    setRemainingTime(0);
+    setAttempt(null);
+    setProblemStates({});
+    setPerProblemRemaining({});
+    setIsRunning(false);
+    setIsSubmitting(false);
+    setIsExamStarted(false);
+    setIsExamLocked(false);
+  }, []);
+
+  const loadCourseExams = useCallback(async (course) => {
+    if (!course?._id) {
+      setCourseExams([]);
+      setActiveCourse(null);
+      return;
+    }
+
+    setActiveCourse(course);
+    setCourseExamsLoading(true);
+    resetExamSession();
+
+    try {
+      const data = await getCourseExams(course._id);
+      console.log('[Student] selectedCourseId', course._id);
+      console.log('[Student] getCourseExams response', data);
+      if (data.serverTime) setServerTimeOffset(new Date(data.serverTime).getTime() - Date.now());
+      setCourseExams(data.exams || []);
+    } catch (error) {
+      setCourseExams([]);
+      toast.error(error.message || 'Unable to load course exams.');
+    } finally {
+      setCourseExamsLoading(false);
+    }
+  }, [resetExamSession]);
+
+  const startSelectedExam = useCallback(async (examId) => {
+    if (!examId) return;
+    setIsLoadingExam(true);
+    autoFinalizeRef.current = false;
+
+    try {
+      const [examResponse, attemptResponse] = await Promise.all([getExamById(examId), startExamAttempt(examId)]);
+      console.log('[Student] startSelectedExam', { examId, examResponse, attemptResponse });
+      const loadedExam = examResponse.exam;
+      const resumedAttempt = attemptResponse.attempt || (await getMyAttempt(examId)).attempt;
+      if (examResponse.serverTime) setServerTimeOffset(new Date(examResponse.serverTime).getTime() - Date.now());
+
+      const loadedProblems = (loadedExam?.problems || []).map((item) => ({ ...(item.problemId || {}), marks: item.marks, duration: item.duration }));
+      const nextProblemStates = {};
+
+      loadedProblems.forEach((problem) => {
+        const problemId = getProblemId(problem);
+        const answer = resumedAttempt?.answers?.find((item) => String(item.problemId) === String(problemId));
+        nextProblemStates[problemId] = buildProblemState(problem, answer);
       });
-      socket?.emit('proctor_event', { type: `shortcut_${e.key}`, time: new Date() });
+
+      setExam(loadedExam);
+      setAttempt(resumedAttempt);
+      setProblems(loadedProblems);
+      setProblemStates(nextProblemStates);
+      setSubmissions(buildSubmissionMap(resumedAttempt, loadedProblems));
+      setCurrentProblemIndex(Math.min(resumedAttempt?.currentProblemIndex || 0, Math.max(loadedProblems.length - 1, 0)));
+      setIsExamStarted(true);
+      setIsExamLocked(resumedAttempt?.status && resumedAttempt.status !== 'ongoing');
+
+      const timerStorageKey = getTimerStorageKey(examId);
+      const savedTimerMap = localStorage.getItem(timerStorageKey);
+      const parsed = savedTimerMap ? JSON.parse(savedTimerMap) : null;
+      const nextRemaining = {};
+      loadedProblems.forEach((problem) => {
+        const pid = getProblemId(problem);
+        const baseSeconds = Math.max(1, Number(problem.duration || loadedExam.duration || loadedExam.totalDuration || 1)) * 60;
+        nextRemaining[pid] = Math.max(0, Number(parsed?.[pid] ?? baseSeconds));
+      });
+      setPerProblemRemaining(nextRemaining);
+    } catch (error) {
+      toast.error(error.message || 'Unable to start exam.');
+    } finally {
+      setIsLoadingExam(false);
     }
   }, []);
 
-  // 4. Block Right-Click & Mouse Paste[cite: 2]
-  const handleSecurity = useCallback((e) => {
-    e.preventDefault();
-    toast('Action Blocked: Secure Mode', { icon: '🛡️' });
-    socket?.emit('proctor_event', { type: e.type, time: new Date() });
-  }, []);
+  const updateCurrentProblemState = useCallback((patch) => {
+    if (!currentProblemId) return;
+    setProblemStates((prev) => ({ ...prev, [currentProblemId]: { ...buildProblemState(currentProblem), ...prev[currentProblemId], ...patch } }));
+  }, [currentProblem, currentProblemId]);
 
-  // 5. Detect Tab Switches[cite: 2]
+  const handleRunCode = async (editorCode) => {
+    if (!currentProblem || isExamLocked || isCurrentProblemLocked) return;
+    const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
+    console.log('FINAL CODE:', sourceCode);
+    console.log('SENT CODE:', sourceCode);
+    setIsRunning(true);
+    try {
+      emitEvent('run_clicked', { examId: exam?._id, problemId: getProblemId(currentProblem), at: new Date().toISOString() });
+      updateCurrentProblemState({ code: sourceCode });
+      const response = await runCode(currentProblemState.language, sourceCode, currentProblemState.input);
+      console.log('[Student] runCode response', response);
+      updateCurrentProblemState({ output: response.output || response.error || 'No output' });
+    } catch {
+      updateCurrentProblemState({ output: 'Runtime Error.' });
+      toast.error('Run failed.');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const finalizeExamSession = async (trigger = 'manual') => {
+    if (!examId || autoFinalizeRef.current) return;
+    autoFinalizeRef.current = true;
+    setIsExamLocked(true);
+
+    try {
+      const response = await finalizeExamAttempt(examId);
+      setAttempt(response.attempt || null);
+      toast[trigger === 'timeout' ? 'error' : 'success'](trigger === 'timeout' ? 'Time is over. Exam submitted automatically.' : 'Exam submitted successfully.');
+    } catch (error) {
+      toast.error(error.message || 'Unable to finalize exam.');
+    }
+  };
+
+  const submitCurrentProblem = async (editorCode) => {
+    if (!examId || !currentProblemId || isExamLocked || isSubmitting) return;
+    const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
+
+    if (!sourceCode.trim()) {
+      toast.error('Cannot submit empty code.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      console.log('FINAL CODE:', sourceCode);
+      console.log('SENT CODE:', sourceCode);
+      console.log("SUBMIT CODE:", sourceCode);
+      console.log("Submitting examId:", examId);
+      updateCurrentProblemState({ code: sourceCode });
+      emitEvent('submit_clicked', { examId, problemId: currentProblemId, at: new Date().toISOString() });
+      const response = await submitExamAnswer({ examId, problemId: currentProblemId, code: sourceCode, language: currentProblemState.language, input: currentProblemState.input });
+      console.log('[Student] submitExamAnswer response', response);
+
+      const nextAttempt = response.attempt;
+      setAttempt(nextAttempt);
+      setSubmissions(buildSubmissionMap(nextAttempt, problems));
+      updateCurrentProblemState({
+        result: {
+          passedPublic: response.passedPublic || 0,
+          totalPublic: response.totalPublic || 0,
+          passedHidden: response.passedHidden || 0,
+          totalHidden: response.totalHidden || 0,
+          score: response.finalScore ?? response.score ?? 0
+        },
+        output: response.output || response.error || `Public ${response.passedPublic || 0}/${response.totalPublic || 0} | Hidden ${response.passedHidden || 0}/${response.totalHidden || 0}`
+      });
+      toast.success('Problem submitted successfully.');
+
+      if (exam.navigationControl === false && currentProblemIndex < problems.length - 1) {
+        setCurrentProblemIndex(Math.min(nextAttempt?.currentProblemIndex ?? currentProblemIndex + 1, problems.length - 1));
+      }
+    } catch (error) {
+      toast.error(error.message || 'Submission failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        socket?.emit('tab_switch', { timestamp: new Date() });
-        toast.error('Violation: Tab Switch Detected');
+    if (!exam?._id || !currentProblemId || !currentProblemState) return;
+    const timeoutId = window.setTimeout(() => {
+      void saveExamAttempt({ examId: exam._id, problemId: currentProblemId, code: currentProblemState.code, language: currentProblemState.language, currentProblemIndex }).catch(() => {});
+    }, 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [currentProblemId, currentProblemIndex, currentProblemState, exam?._id]);
+
+  useEffect(() => {
+    if (!exam) {
+      return;
+    }
+
+    const durationSeconds = getExamDurationSeconds(exam);
+    const startTimeMs = new Date(exam.startTime).getTime();
+    const fallbackEndTimeMs = startTimeMs + durationSeconds * 1000;
+    const endTimeMs = exam.endTime ? new Date(exam.endTime).getTime() : fallbackEndTimeMs;
+
+    const tick = () => {
+      const serverNow = Date.now() + serverTimeOffset;
+      const secondsLeft = Math.max(0, Math.floor((endTimeMs - serverNow) / 1000));
+      setRemainingTime(secondsLeft);
+      if (secondsLeft === 0 && !isExamLocked) {
+        setIsExamLocked(true);
+        void finalizeExamSession('timeout');
       }
     };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
 
-  const handleRun = async () => {
-    setIsProcessing(true);
-    try {
-      const res = await runCode(language, code, customInput);
-      setOutput(res.output || res.error || "Execution Complete.");
-    } catch (err) { setOutput("Runtime Error."); }
-    finally { setIsProcessing(false); }
-  };
+    tick();
+    const intervalId = window.setInterval(tick, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [exam, finalizeExamSession, isExamLocked, serverTimeOffset]);
 
-  const handleSubmit = async () => {
-    if (!selectedProblem) return;
-    setIsProcessing(true);
-    try {
-      const res = await submitCode(selectedProblem._id, language, code);
-      setResult(res);
-      toast.success('Solution Submitted!');
-    } catch (err) { toast.error("Submission failed."); }
-    finally { setIsProcessing(false); }
-  };
+  useEffect(() => {
+    if (!exam?._id || !isPerProblemTimer || !currentProblemId || isExamLocked) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPerProblemRemaining((prev) => {
+        const current = Number(prev[currentProblemId] ?? 0);
+        if (current <= 0) return prev;
+
+        const next = { ...prev, [currentProblemId]: current - 1 };
+        localStorage.setItem(getTimerStorageKey(exam._id), JSON.stringify(next));
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [currentProblemId, exam?._id, isExamLocked, isPerProblemTimer]);
+
+  useEffect(() => {
+    if (!isPerProblemTimer || !currentProblemId || isExamLocked) return;
+
+    if ((perProblemRemaining[currentProblemId] ?? 0) <= 0 && !autoSubmitMapRef.current[currentProblemId]) {
+      autoSubmitMapRef.current[currentProblemId] = true;
+      toast.error('Problem timer expired. Auto-submitting current problem.');
+      void submitCurrentProblem();
+    }
+  }, [currentProblemId, isExamLocked, isPerProblemTimer, perProblemRemaining, submitCurrentProblem]);
+
+  const visibleCourseExams = useMemo(() => {
+    const serverNow = clockNow + serverTimeOffset;
+    return courseExams.filter((item) => item.status !== 'draft').map((item) => {
+      const start = new Date(item.startTime).getTime();
+      const end = new Date(item.endTime).getTime();
+      let runtimeState = 'upcoming';
+      if (serverNow >= start && serverNow <= end) runtimeState = 'ongoing';
+      else if (serverNow > end) runtimeState = 'ended';
+      return { ...item, runtimeState };
+    });
+  }, [clockNow, courseExams, serverTimeOffset]);
 
   if (!user) return <AuthForm onAuthSuccess={setUser} />;
   if (user.role === 'teacher') return <TeacherDashboard />;
 
+  const showResultPanel = Boolean(isExamLocked && attempt);
+
   return (
-    <div style={styles.appContainer} onKeyDown={handleKeyDown} tabIndex="0">
+    <div className="min-h-screen bg-[#050505] text-gray-100 outline-none" onKeyDown={handleKeyDown} tabIndex="0">
       <Toaster position="top-right" />
-      
-      {/* RESTORED SIDEBAR[cite: 2] */}
-      <aside style={styles.sidebar}>
-        <div style={styles.logoSquare}>N</div>
-        <div style={styles.sidebarActions}>
-          {problems.map((p, idx) => (
-            <button 
-              key={p._id} 
-              onClick={() => setSelectedProblem(p)}
-              style={{
-                ...styles.sideBtn,
-                backgroundColor: selectedProblem?._id === p._id ? '#ffa116' : '#333',
-                color: selectedProblem?._id === p._id ? '#000' : '#fff'
-              }}
-            >
-              {idx + 1}
-            </button>
-          ))}
-        </div>
-        <button onClick={() => { logout(); setUser(null); }} style={styles.logoutBtn}><LogOut size={18} /></button>
-      </aside>
 
-      <main style={styles.mainContent}>
-        {/* TOP NAVBAR */}
-        <nav style={styles.navbar}>
-          <div style={styles.navLeft}>
-            <BookOpen size={16} color="#ffa116" />
-            <span style={styles.pTitle}>{selectedProblem?.title || "Select a Problem"}</span>
+      {exam && currentProblem ? (
+        <div className="h-screen flex flex-col">
+          <div className="h-12 border-b border-white/10 bg-[#0b0b0b] px-4 flex items-center justify-between">
+            <div className="text-sm text-white/80">{exam.title}</div>
+            <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
           </div>
-          <div style={styles.navCenter}>
-             <button onClick={handleRun} disabled={isProcessing} style={styles.btnRun}><Play size={14} fill="#ffa116" color="#ffa116" /> Run</button>
-             <button onClick={handleSubmit} disabled={isProcessing} style={styles.btnSub}><Send size={14} /> Submit</button>
-          </div>
-          <div style={styles.navRight}>
-             <div style={styles.secureBadge}><ShieldCheck size={14} /> <span>SECURE MODE</span></div>
-          </div>
-        </nav>
 
-        {/* 3-PANEL CONTENT[cite: 2] */}
-        <div style={styles.grid}>
-          {/* PANEL 1: DESCRIPTION */}
-          <section style={styles.panelContainer}>
-            <div style={styles.panelHeader}><Layout size={14} /> Description</div>
-            <div style={styles.contentArea}>
-              {selectedProblem ? (
-                <>
-                  <h2 style={styles.contentTitle}>{selectedProblem.title}</h2>
-                  <p style={styles.descriptionText}>{selectedProblem.description}</p>
-                  <div style={styles.sampleSection}>
-                    <div style={styles.subLabel}>Public Samples</div>
-                    {selectedProblem.testCases?.filter(t => t.isPublic).map((tc, i) => (
-                      <div key={i} style={styles.sampleCard}>
-                        <div style={{color: '#eff1f6'}}>Input: <span style={{color: '#888'}}>{tc.input}</span></div>
-                        <div style={{color: '#ffa116', marginTop: '4px'}}>Output: <span style={{color: '#888'}}>{tc.expectedOutput}</span></div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : <div style={{color: '#444'}}>Select a problem from the sidebar to begin.</div>}
-            </div>
-          </section>
-
-          {/* PANEL 2: EDITOR[cite: 2] */}
-          <section style={styles.panelContainer} onCopy={handleSecurity} onPaste={handleSecurity} onContextMenu={handleSecurity}>
-            <div style={styles.panelHeader}>
-              <div style={{display: 'flex', gap: '15px', width: '100%', alignItems: 'center'}}>
-                 <div style={{color: '#ffa116', display: 'flex', alignItems: 'center', gap: '5px'}}><Code2 size={14}/> Code</div>
-                 <select value={language} onChange={(e) => setLanguage(e.target.value)} style={styles.langSelect}>
-                    {Object.keys(LANGUAGE_CONFIG).map(l => <option key={l} value={l}>{LANGUAGE_CONFIG[l].label}</option>)}
-                 </select>
-              </div>
-            </div>
-            <div style={{flex: 1, backgroundColor: '#1e1e1e'}}>
-              <Editor 
-                height="100%" 
-                language={language} 
-                theme="vs-dark" 
-                value={code} 
-                onChange={setCode} 
-                options={{ fontSize: 14, minimap: { enabled: false }, padding: { top: 10 }, fontFamily: 'JetBrains Mono, monospace' }} 
-              />
-            </div>
-          </section>
-
-          {/* PANEL 3: CONSOLE */}
-          <section style={styles.panelContainer}>
-            <div style={styles.panelHeader}><Terminal size={14} /> Console</div>
-            <div style={styles.terminalArea}>
-              <div style={styles.subLabel}>Input Buffer</div>
-              <textarea style={styles.inputArea} value={customInput} onChange={(e) => setCustomInput(e.target.value)} placeholder="Enter test input..." />
-              
-              <div style={styles.subLabel}>Output Log</div>
-              <div style={styles.outputBox}><pre>{output || '> Ready...'}</pre></div>
-
-              {result && (
-                <div style={{...styles.verdict, borderLeftColor: result.passed === result.total ? '#2cbb5d' : '#ef4444'}}>
-                  <div style={{fontSize: '10px', color: '#444', fontWeight: 'bold'}}>VERDICT</div>
-                  <div style={{fontSize: '18px', fontWeight: 'bold', color: result.passed === result.total ? '#2cbb5d' : '#ef4444'}}>
-                     {result.passed} / {result.total} Passed
-                  </div>
+          {showResultPanel ? (
+            <div className="border-b border-white/10 bg-[#0a0a0a] p-4">
+              {canShowResults ? (
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Total Score: <span className="font-semibold">{attempt?.totalScore ?? 0}</span></div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Problems Evaluated: <span className="font-semibold">{attempt?.answers?.length || 0}</span></div>
+                  {(attempt?.answers || []).map((answer, idx) => (
+                    <div key={`${answer.problemId}-${idx}`} className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
+                      Problem {idx + 1}: {(answer.finalScore ?? answer.score ?? 0)} / {(answer.marks ?? 0)}
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">Results are hidden until your teacher finalizes and publishes marks.</div>
               )}
             </div>
+          ) : null}
+
+          <div className="flex-1 min-h-0">
+            <SecureIDE
+              exam={exam}
+              examId={exam._id}
+              currentProblem={currentProblem}
+              problems={problems}
+              currentProblemIndex={currentProblemIndex}
+              submissions={submissions}
+              remainingTime={remainingTime}
+              perProblemTimeLeft={currentPerProblemTimeLeft}
+              isPerProblemTimer={isPerProblemTimer}
+              submitExam={() => finalizeExamSession('manual')}
+              submitCurrentProblem={submitCurrentProblem}
+              setCurrentProblemIndex={setCurrentProblemIndex}
+              navigationControl={exam.navigationControl}
+              code={currentProblemState.code}
+              setCode={(nextCode) => updateCurrentProblemState({ code: nextCode })}
+              language={currentProblemState.language}
+              setLanguage={(nextLanguage) => updateCurrentProblemState({ language: nextLanguage, code: getDefaultCode(currentProblem, nextLanguage) })}
+              output={currentProblemState.output}
+              input={currentProblemState.input}
+              setInput={(nextInput) => updateCurrentProblemState({ input: nextInput })}
+              result={currentProblemState.result}
+              isRunning={isRunning}
+              isSubmitting={isSubmitting}
+              onRunCode={handleRunCode}
+              isExamStarted={isExamStarted}
+              isLocked={isExamLocked || isCurrentProblemLocked}
+              languageOptions={LANGUAGE_CONFIG}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-3 p-3">
+          <div className="rounded-xl border border-white/10 bg-[#101010] p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-white/90"><ShieldCheck size={16} className="text-emerald-400" />Secure Student Mode</div>
+              <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"><LogOut size={14} />Logout</button>
+            </div>
+            <StudentDashboard activeCourseId={activeCourse?._id} onSelectCourse={loadCourseExams} />
+          </div>
+
+          <section className="rounded-xl border border-white/10 bg-[#101010] p-4 flex flex-col min-h-[460px]">
+            <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><FileText size={16} className="text-amber-400" />{activeCourse ? `${activeCourse.title} Exams` : 'Available Exams'}</div>
+
+            {!activeCourse ? (
+              <div className="flex-1 flex items-center justify-center text-white/60 text-sm"><BookOpen size={18} className="mr-2" />Select a course to load exams.</div>
+            ) : courseExamsLoading ? (
+              <div className="flex-1 flex items-center justify-center text-white/60 text-sm">Loading exams...</div>
+            ) : courseExams.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-amber-300 text-sm"><AlertTriangle size={16} className="mr-2" />No exams available for this course.</div>
+            ) : (
+              <div className="grid gap-3 overflow-y-auto pr-1">
+                {visibleCourseExams.map((item) => (
+                  <article key={item._id} className="rounded-lg border border-white/10 bg-[#0b0b0b] p-3">
+                    <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                    <p className="mt-1 text-xs text-white/60">{item.problems?.length || 0} problems · {item.runtimeState}</p>
+                    <p className="mt-1 text-xs text-white/60">Starts: {new Date(item.startTime).toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-white/60">Duration: {item.totalDuration} min</p>
+                    <button type="button" onClick={() => startSelectedExam(item._id)} disabled={isLoadingExam || item.runtimeState !== 'ongoing'} className="mt-3 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">{isLoadingExam ? 'Starting...' : item.runtimeState === 'ongoing' ? 'Start Exam' : item.runtimeState === 'upcoming' ? 'Upcoming' : 'Ended'}</button>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </div>
-      </main>
+      )}
     </div>
   );
 }
 
-const styles = {
-  appContainer: { display: 'flex', height: '100vh', backgroundColor: '#1a1a1a', color: '#eff1f6', overflow: 'hidden', outline: 'none' },
-  sidebar: { width: '60px', backgroundColor: '#282828', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', gap: '15px' },
-  logoSquare: { width: '32px', height: '32px', backgroundColor: '#ffa116', borderRadius: '6px', color: '#000', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '20px' },
-  sidebarActions: { flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' },
-  sideBtn: { width: '32px', height: '32px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', transition: '0.2s' },
-  logoutBtn: { background: 'none', border: 'none', color: '#444', cursor: 'pointer', marginTop: 'auto' },
-  mainContent: { flex: 1, display: 'flex', flexDirection: 'column', padding: '8px' },
-  navbar: { height: '50px', backgroundColor: '#282828', borderRadius: '8px', marginBottom: '8px', border: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' },
-  navLeft: { display: 'flex', alignItems: 'center', gap: '10px' },
-  pTitle: { fontSize: '13px', fontWeight: '600' },
-  navCenter: { display: 'flex', gap: '10px' },
-  btnRun: { backgroundColor: '#333', border: 'none', color: '#fff', padding: '6px 16px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
-  btnSub: { backgroundColor: '#2cbb5d', border: 'none', color: '#fff', padding: '6px 16px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
-  navRight: { display: 'flex', alignItems: 'center' },
-  secureBadge: { fontSize: '9px', fontWeight: '900', color: '#2cbb5d', display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #2cbb5d33', padding: '4px 10px', borderRadius: '4px' },
-  grid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '8px', height: '100%' },
-  panelContainer: { backgroundColor: '#282828', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #333' },
-  panelHeader: { height: '38px', backgroundColor: '#33333366', display: 'flex', alignItems: 'center', padding: '0 15px', fontSize: '10px', fontWeight: '900', gap: '10px', color: '#555', letterSpacing: '1px', textTransform: 'uppercase' },
-  contentArea: { flex: 1, padding: '25px', overflowY: 'auto' },
-  contentTitle: { fontSize: '20px', fontWeight: '800', marginBottom: '15px' },
-  descriptionText: { fontSize: '14px', lineHeight: '1.7', color: '#bdc3c7', whiteSpace: 'pre-wrap' },
-  subLabel: { fontSize: '10px', fontWeight: '900', color: '#444', textTransform: 'uppercase', marginBottom: '12px', letterSpacing: '1px' },
-  sampleSection: { marginTop: '35px' },
-  sampleCard: { backgroundColor: '#1e1e1e', padding: '15px', borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace', marginBottom: '10px', border: '1px solid #333' },
-  langSelect: { backgroundColor: '#1a1a1a', color: '#eff1f6', border: '1px solid #333', fontSize: '11px', cursor: 'pointer', outline: 'none', borderRadius: '4px', padding: '4px 8px' },
-  terminalArea: { flex: 1, padding: '20px', display: 'flex', flexDirection: 'column' },
-  inputArea: { width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', padding: '12px', color: '#fff', fontSize: '12px', resize: 'none', outline: 'none', marginBottom: '20px', minHeight: '100px' },
-  outputBox: { flex: 1, backgroundColor: '#000', borderRadius: '8px', border: '1px solid #111', padding: '15px', color: '#2cbb5d', fontSize: '11px', fontFamily: 'monospace', overflowY: 'auto' },
-  verdict: { marginTop: '15px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '8px', borderLeft: '4px solid' }
-};
-
 export default App;
+

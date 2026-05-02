@@ -11,7 +11,7 @@ export const submitCode = async (problemId, language, code) => {
 };
 
 export const getProblems = async () => {
-  const response = await api.get('/problems');
+  const response = await api.get('/problem/all');
   return response.data.problems; // Returns list of problems
 };
 
@@ -27,6 +27,6 @@ export const getAllSubmissions = async (limit = 50) => {
 
 export const createProblem = async (problemData) => {
   // problemData will include title, description, difficulty, and testCases array
-  const response = await api.post('/problems', problemData);
+  const response = await api.post('/problem/create', problemData);
   return response.data;
 };

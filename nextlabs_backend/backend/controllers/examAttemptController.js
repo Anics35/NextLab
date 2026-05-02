@@ -36,6 +36,10 @@ function assertExamOpen(exam) {
   }
 }
 
+function getRemainingTimeSeconds(exam) {
+  return Math.max(0, Math.floor((new Date(exam.endTime).getTime() - Date.now()) / 1000));
+}
+
 function getProblemIndex(exam, problemId) {
   return exam.problems.findIndex((item) => String(item.problemId) === String(problemId));
 }
@@ -60,7 +64,13 @@ async function startAttempt(req, res, next) {
       });
     }
 
-    res.status(201).json({ success: true, attempt, exam });
+    res.status(201).json({
+      success: true,
+      attempt,
+      exam,
+      serverTime: new Date().toISOString(),
+      remainingTime: getRemainingTimeSeconds(exam)
+    });
   } catch (error) {
     next(error);
   }
@@ -97,7 +107,12 @@ async function saveAttempt(req, res, next) {
       : Math.max(attempt.currentProblemIndex, problemIndex);
     await attempt.save();
 
-    res.json({ success: true, attempt });
+    res.json({
+      success: true,
+      attempt,
+      serverTime: new Date().toISOString(),
+      remainingTime: getRemainingTimeSeconds(exam)
+    });
   } catch (error) {
     next(error);
   }
@@ -105,7 +120,8 @@ async function saveAttempt(req, res, next) {
 
 async function submitAttempt(req, res, next) {
   try {
-    const { examId, problemId, code, language, finalSubmit = false } = req.body;
+    const { examId, problemId, code, language, input = "", finalSubmit = false } = req.body;
+    console.log("RECEIVED CODE:", req.body.code);
     const { exam } = await loadExamForStudent(examId, req.user.id);
     assertExamOpen(exam);
 
@@ -119,7 +135,18 @@ async function submitAttempt(req, res, next) {
     }
 
     if (attempt.status !== "ongoing") {
-      throw createApiError(409, "Exam attempt is already submitted", "ATTEMPT_CLOSED");
+      return res.json({
+        success: true,
+        attempt,
+        submissionId: null,
+        passed: 0,
+        total: 0,
+        failed: 0,
+        score: 0,
+        finalScore: 0,
+        serverTime: new Date().toISOString(),
+        remainingTime: getRemainingTimeSeconds(exam)
+      });
     }
 
     const problemIndex = getProblemIndex(exam, problemId);
@@ -137,7 +164,8 @@ async function submitAttempt(req, res, next) {
       problemConfig: exam.problems[problemIndex],
       code,
       language,
-      studentId: req.user.id
+      studentId: req.user.id,
+      input
     });
 
     attempt.answers[problemIndex] = answer;
@@ -156,8 +184,12 @@ async function submitAttempt(req, res, next) {
       attempt,
       submissionId: submission._id,
       ...evaluation,
+      input: String(input || ""),
+      output: submission.output || "",
       score: answer.score,
-      finalScore: answer.finalScore
+      finalScore: answer.finalScore,
+      serverTime: new Date().toISOString(),
+      remainingTime: getRemainingTimeSeconds(exam)
     });
   } catch (error) {
     next(error);
@@ -180,7 +212,7 @@ async function finalizeAttempt(req, res, next) {
       await attempt.save();
     }
 
-    res.json({ success: true, attempt });
+    res.json({ success: true, attempt, serverTime: new Date().toISOString(), remainingTime: 0 });
   } catch (error) {
     next(error);
   }
@@ -189,7 +221,13 @@ async function finalizeAttempt(req, res, next) {
 async function getMyAttempt(req, res, next) {
   try {
     const attempt = await ExamAttempt.findOne({ examId: req.params.examId, studentId: req.user.id });
-    res.json({ success: true, attempt });
+    const exam = await Exam.findById(req.params.examId);
+    res.json({
+      success: true,
+      attempt,
+      serverTime: new Date().toISOString(),
+      remainingTime: exam ? getRemainingTimeSeconds(exam) : 0
+    });
   } catch (error) {
     next(error);
   }
@@ -234,10 +272,15 @@ async function overrideScore(req, res, next) {
     recalculateAttemptScore(attempt);
     await attempt.save();
 
-    await Submission.updateMany(
-      { examAttemptId: attempt._id, problemId },
-      { finalScore: Number(finalScore), manualOverride: true }
-    );
+    const submission = await Submission.findOne({ examAttemptId: attempt._id });
+    if (submission) {
+      const submissionProblem = submission.problems.find((item) => String(item.problemId) === String(problemId));
+      if (submissionProblem) {
+        submissionProblem.score = Number(finalScore);
+        submissionProblem.manualOverride = true;
+        await submission.save();
+      }
+    }
 
     res.json({ success: true, attempt });
   } catch (error) {

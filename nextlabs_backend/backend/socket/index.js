@@ -42,13 +42,30 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
     return;
   }
 
+  const violationEvents = ["tab_switch", "blur", "copy", "paste", "copy_paste", "contextmenu", "fullscreen_exit", "copy_attempt", "paste_attempt"];
+  const requiresActiveAttempt = violationEvents.includes(type) || type.startsWith("shortcut_");
+
+  if (requiresActiveAttempt) {
+    const activeAttempt = payload.examId
+      ? await ExamAttempt.findOne({ examId: payload.examId, studentId: socket.user.id, status: "ongoing" })
+      : await ExamAttempt.findOne({ studentId: socket.user.id, status: "ongoing" }).sort({ updatedAt: -1 });
+
+    if (!activeAttempt) {
+      return;
+    }
+
+    if (!payload.examId) {
+      payload.examId = String(activeAttempt.examId);
+    }
+  }
+
   const studentId = socket.user.id;
   const state = getState(studentId);
   let severity = "info";
   let message = "";
 
   // 🔴 FIX: Recognize the exact events your frontend is sending (copy, paste, contextmenu, shortcut_c, etc.)
-  const isViolation = ["tab_switch", "copy", "paste", "contextmenu", "fullscreen_exit", "copy_attempt", "paste_attempt"].includes(type) || type.startsWith("shortcut_");
+  const isViolation = violationEvents.includes(type) || type.startsWith("shortcut_");
 
   if (type === "run_clicked") {
     state.runs = pruneRecent([...state.runs, Date.now()], 60 * 1000);
@@ -112,7 +129,7 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
     try {
       const update = {
         $push: {
-          violations: { type, timestamp: new Date(), meta: payload }
+          violations: { type, at: new Date(), timestamp: new Date(), meta: payload }
         }
       };
 
@@ -187,7 +204,11 @@ function initSocket(httpServer) {
     
     // Front-end specifically sends these
     socket.on("tab_switch", (payload) => handleStudentEvent(io, socket, "tab_switch", payload));
-    socket.on("proctor_event", (payload) => handleStudentEvent(io, socket, payload.type, payload)); 
+    socket.on("copy_paste", (payload) => handleStudentEvent(io, socket, "copy_paste", payload));
+    socket.on("proctor_event", (payload) => {
+      io.emit("proctor_alert", payload);
+      handleStudentEvent(io, socket, payload.type, payload);
+    }); 
   });
 
   return io;

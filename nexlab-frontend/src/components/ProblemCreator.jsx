@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Plus, Trash2, Save, FileCode2, Eye, EyeOff, LayoutTemplate } from 'lucide-react';
+import { createProblem } from '../services/codeService';
 
 function ProblemCreator() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,22 +38,15 @@ function ProblemCreator() {
 
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      // Replace this URL with your actual backend endpoint if different
-      const response = await fetch('http://localhost:5001/api/problems', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          testCases
-        })
+      await createProblem({
+        title,
+        description,
+        testCases: testCases.map((testCase) => ({
+          input: testCase.input,
+          expectedOutput: testCase.expectedOutput,
+          isPublic: Boolean(testCase.isPublic)
+        }))
       });
-
-      if (!response.ok) throw new Error("Failed to save problem");
 
       toast.success("Exam Problem Created Successfully!");
       setTitle('');
@@ -60,7 +54,7 @@ function ProblemCreator() {
       setTestCases([{ input: '', expectedOutput: '', isPublic: true }]);
       
     } catch (error) {
-      toast.error(error.message || "Could not save problem.");
+      toast.error(error.response?.data?.error || error.message || "Could not save problem.");
     } finally {
       setIsSubmitting(false);
     }
@@ -71,10 +65,10 @@ function ProblemCreator() {
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <FileCode2 color="#ffa116" size={20} />
-          <h2 style={styles.title}>Exam Builder</h2>
+          <h2 style={styles.title}>Problem Builder</h2>
         </div>
         <button onClick={handleSaveProblem} disabled={isSubmitting} style={styles.saveBtn}>
-          <Save size={14} /> {isSubmitting ? 'Saving...' : 'Publish Exam'}
+          <Save size={14} /> {isSubmitting ? 'Saving...' : 'Save Problem'}
         </button>
       </div>
 

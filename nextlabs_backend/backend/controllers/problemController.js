@@ -4,9 +4,15 @@ const { isBlank, isValidObjectId, toStringValue } = require("../utils/validators
 
 async function listProblems(req, res, next) {
   try {
-    // FIXED: Added "testCases" to the select string so the frontend can see samples
-    const problems = await Problem.find()
-      .select("title description difficulty testCases createdAt") 
+    const filter = {};
+    if (req.user?.role === "teacher") {
+      filter.createdBy = req.user.id;
+    } else if (req.query.teacherId && isValidObjectId(req.query.teacherId)) {
+      filter.createdBy = req.query.teacherId;
+    }
+
+    const problems = await Problem.find(filter)
+      .select("title description difficulty publicTestCases hiddenTestCases testCases createdAt createdBy")
       .sort({ createdAt: -1 });
 
     res.json({
@@ -31,6 +37,7 @@ async function getProblem(req, res, next) {
     if (!problem) {
       throw createApiError(404, "Problem not found", "PROBLEM_NOT_FOUND");
     }
+    console.log("TEST CASES:", problem.testCases);
 
     res.json({
       success: true,
@@ -43,28 +50,65 @@ async function getProblem(req, res, next) {
 
 async function createProblem(req, res, next) {
   try {
-    const { title, description, difficulty = "easy", testCases = [] } = req.body;
+    const {
+      title,
+      description,
+      difficulty = "easy",
+      publicTestCases = [],
+      hiddenTestCases = []
+    } = req.body;
+    console.log("[createProblem] req.body", req.body);
 
-    if (isBlank(title) || isBlank(description) || !Array.isArray(testCases) || testCases.length === 0) {
-      throw createApiError(400, "title, description and at least one test case are required", "MISSING_FIELDS");
+    if (isBlank(title) || isBlank(description)) {
+      throw createApiError(400, "title and description are required", "MISSING_FIELDS");
     }
 
-    const invalidCaseIndex = testCases.findIndex((testCase) => isBlank(testCase.expectedOutput));
-    if (invalidCaseIndex !== -1) {
-      throw createApiError(400, `testCases[${invalidCaseIndex}].expectedOutput is required`, "INVALID_TEST_CASE");
+    const validateCase = (testCase) => (
+      typeof testCase !== "object" ||
+      testCase === null ||
+      isBlank(toStringValue(testCase.output, ""))
+    );
+
+    const invalidPublic = publicTestCases.findIndex(validateCase);
+    if (invalidPublic !== -1) {
+      throw createApiError(
+        400,
+        `publicTestCases[${invalidPublic}] must include output`,
+        "INVALID_TEST_CASE"
+      );
+    }
+    const invalidHidden = hiddenTestCases.findIndex(validateCase);
+    if (invalidHidden !== -1) {
+      throw createApiError(400, `hiddenTestCases[${invalidHidden}] must include output`, "INVALID_TEST_CASE");
     }
 
-    // FIXED: Mapping logic now includes isPublic
     const problem = await Problem.create({
       title: title.trim(),
       description: description.trim(),
       difficulty,
-      testCases: testCases.map((testCase) => ({
+      createdBy: req.user.id,
+      publicTestCases: publicTestCases.map((testCase) => ({
         input: toStringValue(testCase.input),
-        expectedOutput: toStringValue(testCase.expectedOutput).trim(),
-        isPublic: !!testCase.isPublic // Force convert to boolean true/false
-      }))
+        output: toStringValue(testCase.output).trim()
+      })),
+      hiddenTestCases: hiddenTestCases.map((testCase) => ({
+        input: toStringValue(testCase.input),
+        output: toStringValue(testCase.output).trim()
+      })),
+      testCases: [
+        ...publicTestCases.map((testCase) => ({
+          input: toStringValue(testCase.input),
+          expectedOutput: toStringValue(testCase.output).trim(),
+          isPublic: true
+        })),
+        ...hiddenTestCases.map((testCase) => ({
+          input: toStringValue(testCase.input),
+          expectedOutput: toStringValue(testCase.output).trim(),
+          isPublic: false
+        }))
+      ]
     });
+    console.log("TEST CASES:", problem.testCases);
 
     res.status(201).json({
       success: true,

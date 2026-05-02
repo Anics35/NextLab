@@ -28,7 +28,9 @@ async function authenticate(req, res, next) {
       id: String(user._id),
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      rollNumber: user.rollNumber,
+      semester: user.semester
     };
 
     await touchSession(req.user.id, payload.sessionToken);

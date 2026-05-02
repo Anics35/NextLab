@@ -4,7 +4,7 @@ const examProblemSchema = new mongoose.Schema(
   {
     problemId: { type: mongoose.Schema.Types.ObjectId, ref: "Problem", required: true },
     marks: { type: Number, required: true, min: 0 },
-    individualTimeLimit: { type: Number, min: 1 }
+    duration: { type: Number, min: 1 }
   },
   { _id: false }
 );
@@ -12,6 +12,7 @@ const examProblemSchema = new mongoose.Schema(
 const examSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
+    instructions: { type: String, default: "", trim: true },
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true, index: true },
     problems: {
       type: [examProblemSchema],
@@ -19,13 +20,27 @@ const examSchema = new mongoose.Schema(
     },
     timerType: {
       type: String,
-      enum: ["global", "per-problem"],
+      enum: ["global", "per_problem"],
       default: "global"
     },
-    totalDuration: { type: Number, required: true, min: 1 },
+    duration: { type: Number, min: 1 },
     navigationControl: { type: Boolean, default: true },
     startTime: { type: Date, required: true },
     endTime: { type: Date, required: true },
+    status: {
+      type: String,
+      enum: ["draft", "published", "ongoing", "ended"],
+      default: "published",
+      index: true
+    },
+    marksFinalized: { type: Boolean, default: false },
+    showResultsImmediately: { type: Boolean, default: false },
+    resultVisibility: {
+      type: String,
+      enum: ["manual", "immediate"],
+      default: "manual"
+    },
+    resultsVisible: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }
   },
   { timestamps: true }

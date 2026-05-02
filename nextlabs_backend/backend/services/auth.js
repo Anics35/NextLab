@@ -46,6 +46,8 @@ function signToken(user, sessionToken = undefined) {
     name: user.name,
     email: user.email,
     role: user.role,
+    rollNumber: user.rollNumber,
+    semester: user.semester,
     sessionToken,
     iat: now,
     exp: now + TOKEN_TTL_SECONDS

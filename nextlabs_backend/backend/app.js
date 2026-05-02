@@ -18,6 +18,13 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  console.log(`[REQ] ${req.method} ${req.originalUrl}`, {
+    query: req.query,
+    body: req.method === "GET" ? undefined : req.body
+  });
+  next();
+});
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "nexlab-backend" });
@@ -30,8 +37,10 @@ app.use("/courses", courseRoutes);
 app.use("/exam", examRoutes);
 app.use("/exams", examRoutes);
 app.use("/exam-attempts", examAttemptRoutes);
+app.use("/problem", problemRoutes);
 app.use("/problems", problemRoutes);
 app.use("/proctor", proctorRoutes);
+app.use("/submission", submissionRoutes);
 app.use("/submissions", submissionRoutes);
 app.use("/activity", activityRoutes);
 app.use("/analytics", analyticsRoutes);

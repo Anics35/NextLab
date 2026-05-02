@@ -93,7 +93,7 @@ async function listMyCourses(req, res, next) {
 
     const courses = await Course.find(filter)
       .populate("teacherId", "name email")
-      .populate("students", "name email role")
+      .populate("students", "name email role rollNumber semester")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: courses.length, courses });
@@ -112,7 +112,7 @@ async function getCourse(req, res, next) {
 
     const course = await Course.findById(id)
       .populate("teacherId", "name email")
-      .populate("students", "name email role");
+      .populate("students", "name email role rollNumber semester");
 
     if (!course) {
       throw createApiError(404, "Course not found", "COURSE_NOT_FOUND");

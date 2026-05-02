@@ -5,8 +5,14 @@ const answerSchema = new mongoose.Schema(
     problemId: { type: mongoose.Schema.Types.ObjectId, ref: "Problem", required: true },
     code: { type: String, default: "" },
     language: { type: String, default: "" },
+    input: { type: String, default: "" },
+    output: { type: String, default: "" },
     passed: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
+    passedPublic: { type: Number, default: 0 },
+    totalPublic: { type: Number, default: 0 },
+    passedHidden: { type: Number, default: 0 },
+    totalHidden: { type: Number, default: 0 },
     marks: { type: Number, default: 0 },
     score: { type: Number, default: 0 },
     finalScore: { type: Number, default: 0 },
@@ -21,6 +27,7 @@ const answerSchema = new mongoose.Schema(
 const violationSchema = new mongoose.Schema(
   {
     type: { type: String, required: true },
+    at: { type: Date, default: Date.now },
     timestamp: { type: Date, default: Date.now },
     meta: { type: Object, default: {} }
   },
