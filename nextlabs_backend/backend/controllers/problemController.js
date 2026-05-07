@@ -55,7 +55,8 @@ async function createProblem(req, res, next) {
       description,
       difficulty = "easy",
       publicTestCases = [],
-      hiddenTestCases = []
+      hiddenTestCases = [],
+      testCases = []
     } = req.body;
     console.log("[createProblem] req.body", req.body);
 
@@ -63,13 +64,31 @@ async function createProblem(req, res, next) {
       throw createApiError(400, "title and description are required", "MISSING_FIELDS");
     }
 
+    const legacyPublicCases = Array.isArray(testCases)
+      ? testCases.filter((testCase) => testCase.isPublic)
+      : [];
+    const legacyHiddenCases = Array.isArray(testCases)
+      ? testCases.filter((testCase) => !testCase.isPublic)
+      : [];
+    const effectivePublicCases = Array.isArray(publicTestCases) && publicTestCases.length > 0
+      ? publicTestCases
+      : legacyPublicCases;
+    const effectiveHiddenCases = Array.isArray(hiddenTestCases) && hiddenTestCases.length > 0
+      ? hiddenTestCases
+      : legacyHiddenCases;
+
+    if (effectivePublicCases.length + effectiveHiddenCases.length === 0) {
+      throw createApiError(400, "At least one test case is required", "MISSING_FIELDS");
+    }
+
+    const getExpectedOutput = (testCase) => toStringValue(testCase.output || testCase.expectedOutput, "");
     const validateCase = (testCase) => (
       typeof testCase !== "object" ||
       testCase === null ||
-      isBlank(toStringValue(testCase.output, ""))
+      isBlank(getExpectedOutput(testCase))
     );
 
-    const invalidPublic = publicTestCases.findIndex(validateCase);
+    const invalidPublic = effectivePublicCases.findIndex(validateCase);
     if (invalidPublic !== -1) {
       throw createApiError(
         400,
@@ -77,7 +96,7 @@ async function createProblem(req, res, next) {
         "INVALID_TEST_CASE"
       );
     }
-    const invalidHidden = hiddenTestCases.findIndex(validateCase);
+    const invalidHidden = effectiveHiddenCases.findIndex(validateCase);
     if (invalidHidden !== -1) {
       throw createApiError(400, `hiddenTestCases[${invalidHidden}] must include output`, "INVALID_TEST_CASE");
     }
@@ -87,23 +106,23 @@ async function createProblem(req, res, next) {
       description: description.trim(),
       difficulty,
       createdBy: req.user.id,
-      publicTestCases: publicTestCases.map((testCase) => ({
+      publicTestCases: effectivePublicCases.map((testCase) => ({
         input: toStringValue(testCase.input),
-        output: toStringValue(testCase.output).trim()
+        output: getExpectedOutput(testCase).trim()
       })),
-      hiddenTestCases: hiddenTestCases.map((testCase) => ({
+      hiddenTestCases: effectiveHiddenCases.map((testCase) => ({
         input: toStringValue(testCase.input),
-        output: toStringValue(testCase.output).trim()
+        output: getExpectedOutput(testCase).trim()
       })),
       testCases: [
-        ...publicTestCases.map((testCase) => ({
+        ...effectivePublicCases.map((testCase) => ({
           input: toStringValue(testCase.input),
-          expectedOutput: toStringValue(testCase.output).trim(),
+          expectedOutput: getExpectedOutput(testCase).trim(),
           isPublic: true
         })),
-        ...hiddenTestCases.map((testCase) => ({
+        ...effectiveHiddenCases.map((testCase) => ({
           input: toStringValue(testCase.input),
-          expectedOutput: toStringValue(testCase.output).trim(),
+          expectedOutput: getExpectedOutput(testCase).trim(),
           isPublic: false
         }))
       ]

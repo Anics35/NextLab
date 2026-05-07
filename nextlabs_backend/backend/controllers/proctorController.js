@@ -28,7 +28,8 @@ async function recordProctorEvent(req, res, next) {
     }
 
     const limit = Number(process.env.PROCTOR_VIOLATION_LIMIT || 0);
-    if (limit > 0 && attempt.violations.length >= limit && attempt.status === "ongoing") {
+    const autoSubmitEnabled = process.env.PROCTOR_AUTO_SUBMIT === "true";
+    if (autoSubmitEnabled && limit > 0 && attempt.violations.length >= limit && attempt.status === "ongoing") {
       attempt.status = "auto-submitted";
       attempt.endTime = new Date();
     }

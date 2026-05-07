@@ -61,6 +61,7 @@ function SecureIDE({
   const dragStateRef = useRef(null);
   const editorRef = useRef(null);
   const syncTimeoutRef = useRef(null);
+  const setCodeRef = useRef(setCode);
   const isSequentialMode = navigationControl === false;
   const currentProblemSubmitted = Boolean(submissions?.[currentProblemId]);
   const centerWidth = 100 - leftWidth - rightWidth;
@@ -70,6 +71,10 @@ function SecureIDE({
   useEffect(() => {
     latestCodeRef.current = code || '';
   }, [code]);
+
+  useEffect(() => {
+    setCodeRef.current = setCode;
+  }, [setCode]);
 
   useEffect(() => () => {
     if (syncTimeoutRef.current) {
@@ -114,10 +119,10 @@ function SecureIDE({
 
     const savedCode = localStorage.getItem(storageKey);
     if (savedCode !== null && savedCode !== latestCodeRef.current) {
-      setCode(savedCode);
+      setCodeRef.current?.(savedCode);
       latestCodeRef.current = savedCode;
     }
-  }, [setCode, storageKey]);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!storageKey) {
@@ -211,13 +216,18 @@ function SecureIDE({
 
   const getEditorCode = () => editorRef.current?.getValue?.() ?? latestCodeRef.current ?? code ?? '';
   const syncEditorCode = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      window.clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+
     const nextCode = getEditorCode();
     latestCodeRef.current = nextCode;
-    if (typeof setCode === 'function' && nextCode !== code) {
-      setCode(nextCode);
+    if (typeof setCodeRef.current === 'function' && nextCode !== code) {
+      setCodeRef.current(nextCode);
     }
     return nextCode;
-  }, [code, setCode]);
+  }, [code]);
 
   if (!problems.length || !currentProblem) {
     return (
@@ -389,7 +399,20 @@ function SecureIDE({
             <pre className={`flex-1 overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 text-xs ${String(output).includes('Error') ? 'text-red-400' : 'text-gray-300'}`}>
               {output || '> Ready for execution'}
             </pre>
-            {result ? <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">Public {result.passedPublic || 0}/{result.totalPublic || 0} · Hidden {result.passedHidden || 0}/{result.totalHidden || 0} · Score {result.score ?? 0}</div> : null}
+            {result ? (
+              <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">
+                <div>Total {result.passed || 0}/{result.total || 0} · Public {result.passedPublic || 0}/{result.totalPublic || 0} · Hidden {result.passedHidden || 0}/{result.totalHidden || 0} · Score {result.score ?? 0}</div>
+                {Array.isArray(result.details) && result.details.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {result.details.map((detail, index) => (
+                      <div key={`${detail.input || ''}-${index}`} className={detail.passed ? 'text-emerald-300' : 'text-red-300'}>
+                        Test {index + 1} {(detail.isPublic ?? detail.visibility === 'public') ? '(Public)' : '(Hidden)'}: {detail.passed ? 'Pass' : 'Fail'}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </section>
       </main>
@@ -398,4 +421,3 @@ function SecureIDE({
 }
 
 export default SecureIDE;
-

@@ -17,13 +17,24 @@ function computeScore(passedTestCases, totalTestCases, totalMarks = 0) {
 async function evaluateSubmission({ code, language, problem, visibility = "all" }) {
   const details = [];
   const legacyCases = Array.isArray(problem.testCases) ? problem.testCases : [];
+  const normalizeCase = (testCase, kind) => ({
+    input: String(testCase.input || ""),
+    output: String(testCase.output || testCase.expectedOutput || ""),
+    _kind: kind
+  });
   const publicCases = Array.isArray(problem.publicTestCases) && problem.publicTestCases.length
-    ? problem.publicTestCases
-    : legacyCases.filter((item) => item.isPublic).map((item) => ({ input: item.input, output: item.output || item.expectedOutput }));
+    ? problem.publicTestCases.map((item) => normalizeCase(item, "public"))
+    : legacyCases.filter((item) => item.isPublic).map((item) => normalizeCase(item, "public"));
   const hiddenCases = Array.isArray(problem.hiddenTestCases) && problem.hiddenTestCases.length
-    ? problem.hiddenTestCases
-    : legacyCases.filter((item) => !item.isPublic).map((item) => ({ input: item.input, output: item.output || item.expectedOutput }));
-  const allCases = [...publicCases.map((item) => ({ ...item, _kind: "public" })), ...hiddenCases.map((item) => ({ ...item, _kind: "hidden" }))];
+    ? problem.hiddenTestCases.map((item) => normalizeCase(item, "hidden"))
+    : legacyCases.filter((item) => !item.isPublic).map((item) => normalizeCase(item, "hidden"));
+  if (publicCases.length + hiddenCases.length === 0) {
+    const error = new Error("Problem has no test cases configured");
+    error.status = 400;
+    error.code = "NO_TEST_CASES";
+    throw error;
+  }
+  const allCases = [...publicCases, ...hiddenCases];
   const selectedCases = visibility === "public" ? allCases.filter((item) => item._kind === "public") : allCases;
 
   for (const testCase of selectedCases) {

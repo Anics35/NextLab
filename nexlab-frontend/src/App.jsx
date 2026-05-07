@@ -41,11 +41,14 @@ const buildProblemState = (problem, answer) => {
     input: answer?.input || '',
     output: answer?.output || '',
     result: answer ? {
+      passed: answer.passed || 0,
+      total: answer.total || 0,
       passedPublic: answer.passedPublic || 0,
       totalPublic: answer.totalPublic || 0,
       passedHidden: answer.passedHidden || 0,
       totalHidden: answer.totalHidden || 0,
-      score: answer.finalScore ?? answer.score ?? 0
+      score: answer.finalScore ?? answer.score ?? 0,
+      details: answer.details || answer.testResults || []
     } : null
   };
 };
@@ -280,17 +283,21 @@ function App() {
       console.log('[Student] submitExamAnswer response', response);
 
       const nextAttempt = response.attempt;
+      localStorage.removeItem(`exam_${examId}_problem_${currentProblemId}`);
       setAttempt(nextAttempt);
       setSubmissions(buildSubmissionMap(nextAttempt, problems));
       updateCurrentProblemState({
         result: {
+          passed: response.passed || 0,
+          total: response.total || 0,
           passedPublic: response.passedPublic || 0,
           totalPublic: response.totalPublic || 0,
           passedHidden: response.passedHidden || 0,
           totalHidden: response.totalHidden || 0,
-          score: response.finalScore ?? response.score ?? 0
+          score: response.finalScore ?? response.score ?? 0,
+          details: response.testResults || response.details || []
         },
-        output: response.output || response.error || `Public ${response.passedPublic || 0}/${response.totalPublic || 0} | Hidden ${response.passedHidden || 0}/${response.totalHidden || 0}`
+        output: response.output || response.error || `Passed ${response.passed || 0}/${response.total || 0}`
       });
       toast.success('Problem submitted successfully.');
 
@@ -305,12 +312,22 @@ function App() {
   };
 
   useEffect(() => {
-    if (!exam?._id || !currentProblemId || !currentProblemState) return;
+    if (
+      !exam?._id ||
+      !currentProblemId ||
+      !currentProblemState ||
+      isSubmitting ||
+      isExamLocked ||
+      submissions?.[currentProblemId]
+    ) {
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       void saveExamAttempt({ examId: exam._id, problemId: currentProblemId, code: currentProblemState.code, language: currentProblemState.language, currentProblemIndex }).catch(() => {});
     }, 1000);
     return () => window.clearTimeout(timeoutId);
-  }, [currentProblemId, currentProblemIndex, currentProblemState, exam?._id]);
+  }, [currentProblemId, currentProblemIndex, currentProblemState, exam?._id, isExamLocked, isSubmitting, submissions]);
 
   useEffect(() => {
     if (!exam) {
@@ -484,4 +501,3 @@ function App() {
 }
 
 export default App;
-

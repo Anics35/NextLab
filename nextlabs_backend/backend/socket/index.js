@@ -144,7 +144,8 @@ async function handleStudentEvent(io, socket, type, payload = {}) {
       );
 
       const limit = Number(process.env.PROCTOR_VIOLATION_LIMIT || 0);
-      if (attempt && limit > 0 && attempt.violations.length >= limit) {
+      const autoSubmitEnabled = process.env.PROCTOR_AUTO_SUBMIT === "true";
+      if (autoSubmitEnabled && attempt && limit > 0 && attempt.violations.length >= limit) {
         attempt.status = "auto-submitted";
         attempt.endTime = new Date();
         await attempt.save();

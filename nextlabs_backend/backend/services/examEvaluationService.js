@@ -80,7 +80,7 @@ async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language
 
   const existingIndex = submission.problems.findIndex((item) => String(item.problemId) === String(problem._id));
   if (existingIndex !== -1) {
-    submission.problems[existingIndex] = newProblemData;
+    submission.problems.set(existingIndex, newProblemData);
   } else {
     submission.problems.push(newProblemData);
   }

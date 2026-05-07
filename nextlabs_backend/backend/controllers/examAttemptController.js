@@ -44,6 +44,44 @@ function getProblemIndex(exam, problemId) {
   return exam.problems.findIndex((item) => String(item.problemId) === String(problemId));
 }
 
+function canRecoverAutoSubmittedAttempt(attempt, exam, problemIndex) {
+  if (attempt.status !== "auto-submitted" || getRemainingTimeSeconds(exam) <= 0) {
+    return false;
+  }
+
+  const answer = attempt.answers[problemIndex];
+  return !answer || !answer.submittedAt || Number(answer.total || 0) === 0;
+}
+
+function serializeAnswerResult(answer, exam) {
+  const details = Array.isArray(answer?.details) ? answer.details : [];
+
+  return {
+    passed: answer?.passed || 0,
+    total: answer?.total || 0,
+    failed: Math.max(0, (answer?.total || 0) - (answer?.passed || 0)),
+    passedPublic: answer?.passedPublic || 0,
+    totalPublic: answer?.totalPublic || 0,
+    passedHidden: answer?.passedHidden || 0,
+    totalHidden: answer?.totalHidden || 0,
+    input: String(answer?.input || ""),
+    output: String(answer?.output || ""),
+    details,
+    testResults: details.map((detail) => ({
+      input: String(detail.input || ""),
+      expected: String(detail.expectedOutput || detail.expected || ""),
+      output: String(detail.actualOutput || detail.output || detail.error || ""),
+      passed: Boolean(detail.passed),
+      isPublic: detail.visibility === "public" || detail.isPublic === true,
+      error: String(detail.error || "")
+    })),
+    score: answer?.score || 0,
+    finalScore: answer?.finalScore ?? answer?.score ?? 0,
+    serverTime: new Date().toISOString(),
+    remainingTime: exam ? getRemainingTimeSeconds(exam) : 0
+  };
+}
+
 async function startAttempt(req, res, next) {
   try {
     const { examId } = req.body;
@@ -87,13 +125,25 @@ async function saveAttempt(req, res, next) {
       throw createApiError(404, "Exam attempt not started", "ATTEMPT_NOT_FOUND");
     }
 
-    if (attempt.status !== "ongoing") {
-      throw createApiError(409, "Exam attempt is already submitted", "ATTEMPT_CLOSED");
-    }
-
     const problemIndex = getProblemIndex(exam, problemId);
     if (problemIndex === -1) {
       throw createApiError(400, "Problem is not part of this exam", "PROBLEM_NOT_IN_EXAM");
+    }
+
+    if (attempt.status !== "ongoing") {
+      if (canRecoverAutoSubmittedAttempt(attempt, exam, problemIndex)) {
+        attempt.status = "ongoing";
+        attempt.endTime = undefined;
+      } else {
+        return res.json({
+          success: true,
+          attempt,
+          saved: false,
+          closed: true,
+          serverTime: new Date().toISOString(),
+          remainingTime: getRemainingTimeSeconds(exam)
+        });
+      }
     }
 
     if (exam.navigationControl === false && problemIndex > attempt.currentProblemIndex) {
@@ -134,24 +184,25 @@ async function submitAttempt(req, res, next) {
       throw createApiError(404, "Exam attempt not started", "ATTEMPT_NOT_FOUND");
     }
 
-    if (attempt.status !== "ongoing") {
-      return res.json({
-        success: true,
-        attempt,
-        submissionId: null,
-        passed: 0,
-        total: 0,
-        failed: 0,
-        score: 0,
-        finalScore: 0,
-        serverTime: new Date().toISOString(),
-        remainingTime: getRemainingTimeSeconds(exam)
-      });
-    }
-
     const problemIndex = getProblemIndex(exam, problemId);
     if (problemIndex === -1) {
       throw createApiError(400, "Problem is not part of this exam", "PROBLEM_NOT_IN_EXAM");
+    }
+
+    if (attempt.status !== "ongoing") {
+      const existingAnswer = attempt.answers[problemIndex];
+      if (canRecoverAutoSubmittedAttempt(attempt, exam, problemIndex)) {
+        attempt.status = "ongoing";
+        attempt.endTime = undefined;
+      } else {
+        return res.json({
+          success: true,
+          attempt,
+          submissionId: null,
+          closed: true,
+          ...serializeAnswerResult(existingAnswer, exam)
+        });
+      }
     }
 
     if (exam.navigationControl === false && problemIndex > attempt.currentProblemIndex) {
@@ -168,7 +219,7 @@ async function submitAttempt(req, res, next) {
       input
     });
 
-    attempt.answers[problemIndex] = answer;
+    attempt.answers.set(problemIndex, answer);
     attempt.currentProblemIndex = Math.max(attempt.currentProblemIndex, problemIndex + 1);
 
     if (finalSubmit) {
@@ -185,7 +236,16 @@ async function submitAttempt(req, res, next) {
       submissionId: submission._id,
       ...evaluation,
       input: String(input || ""),
-      output: submission.output || "",
+      output: answer.output || "",
+      details: evaluation.details,
+      testResults: evaluation.details.map((detail) => ({
+        input: String(detail.input || ""),
+        expected: String(detail.expectedOutput || ""),
+        output: String(detail.actualOutput || detail.error || ""),
+        passed: Boolean(detail.passed),
+        isPublic: detail.visibility === "public",
+        error: String(detail.error || "")
+      })),
       score: answer.score,
       finalScore: answer.finalScore,
       serverTime: new Date().toISOString(),

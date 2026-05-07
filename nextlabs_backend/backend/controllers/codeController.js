@@ -1,4 +1,5 @@
 const ActivityEvent = require("../models/ActivityEvent");
+const Problem = require("../models/Problem");
 const Submission = require("../models/Submission");
 const { evaluateSubmission } = require("../services/evaluator");
 const { SUPPORTED_LANGUAGES, runCode } = require("../services/judge0");
