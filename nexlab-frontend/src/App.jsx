@@ -120,6 +120,11 @@ function App() {
     initSocket(localStorage.getItem('token'));
   }, [user]);
 
+  const canReviewExam = useCallback((item) => Boolean(
+    item?.marksFinalized === true &&
+    (item?.resultsVisible === true || item?.showResultsImmediately === true || item?.resultVisibility === 'immediate')
+  ), []);
+
   useEffect(() => {
     const intervalId = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
@@ -176,19 +181,24 @@ function App() {
     }
   }, [resetExamSession]);
 
-  const startSelectedExam = useCallback(async (examId) => {
+  const loadExamSession = useCallback(async (examId, { reviewMode = false } = {}) => {
     if (!examId) return;
     setIsLoadingExam(true);
     autoFinalizeRef.current = false;
 
     try {
-      const [examResponse, attemptResponse] = await Promise.all([getExamById(examId), startExamAttempt(examId)]);
-      console.log('[Student] startSelectedExam', { examId, examResponse, attemptResponse });
+      const examResponse = await getExamById(examId);
       const loadedExam = examResponse.exam;
-      const resumedAttempt = attemptResponse.attempt || (await getMyAttempt(examId)).attempt;
+      const loadedProblems = (loadedExam?.problems || []).map((item) => ({ ...(item.problemId || {}), marks: item.marks, duration: item.duration }));
+
+      const attemptResponse = reviewMode
+        ? await getMyAttempt(examId)
+        : await startExamAttempt(examId);
+
+      const resumedAttempt = attemptResponse.attempt || (reviewMode ? null : (await getMyAttempt(examId)).attempt);
+      console.log(reviewMode ? '[Student] openExamForReview' : '[Student] startSelectedExam', { examId, examResponse, attemptResponse });
       if (examResponse.serverTime) setServerTimeOffset(new Date(examResponse.serverTime).getTime() - Date.now());
 
-      const loadedProblems = (loadedExam?.problems || []).map((item) => ({ ...(item.problemId || {}), marks: item.marks, duration: item.duration }));
       const nextProblemStates = {};
 
       loadedProblems.forEach((problem) => {
@@ -203,8 +213,8 @@ function App() {
       setProblemStates(nextProblemStates);
       setSubmissions(buildSubmissionMap(resumedAttempt, loadedProblems));
       setCurrentProblemIndex(Math.min(resumedAttempt?.currentProblemIndex || 0, Math.max(loadedProblems.length - 1, 0)));
-      setIsExamStarted(true);
-      setIsExamLocked(resumedAttempt?.status && resumedAttempt.status !== 'ongoing');
+      setIsExamStarted(!reviewMode);
+      setIsExamLocked(reviewMode || (resumedAttempt?.status && resumedAttempt.status !== 'ongoing'));
 
       const timerStorageKey = getTimerStorageKey(examId);
       const savedTimerMap = localStorage.getItem(timerStorageKey);
@@ -217,11 +227,14 @@ function App() {
       });
       setPerProblemRemaining(nextRemaining);
     } catch (error) {
-      toast.error(error.message || 'Unable to start exam.');
+      toast.error(error.message || (reviewMode ? 'Unable to open exam results.' : 'Unable to start exam.'));
     } finally {
       setIsLoadingExam(false);
     }
   }, []);
+
+  const startSelectedExam = useCallback((examId) => loadExamSession(examId, { reviewMode: false }), [loadExamSession]);
+  const openExamResults = useCallback((examId) => loadExamSession(examId, { reviewMode: true }), [loadExamSession]);
 
   const updateCurrentProblemState = useCallback((patch) => {
     if (!currentProblemId) return;
@@ -471,7 +484,7 @@ function App() {
             <StudentDashboard activeCourseId={activeCourse?._id} onSelectCourse={loadCourseExams} />
           </div>
 
-          <section className="rounded-xl border border-white/10 bg-[#101010] p-4 flex flex-col min-h-[460px]">
+          <section className="rounded-xl border border-white/10 bg-[#101010] p-4 flex flex-col min-h-115">
             <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><FileText size={16} className="text-amber-400" />{activeCourse ? `${activeCourse.title} Exams` : 'Available Exams'}</div>
 
             {!activeCourse ? (
@@ -482,15 +495,33 @@ function App() {
               <div className="flex-1 flex items-center justify-center text-amber-300 text-sm"><AlertTriangle size={16} className="mr-2" />No exams available for this course.</div>
             ) : (
               <div className="grid gap-3 overflow-y-auto pr-1">
-                {visibleCourseExams.map((item) => (
+                {visibleCourseExams.map((item) => {
+                  const reviewReady = canReviewExam(item);
+                  const buttonLabel = item.runtimeState === 'ongoing'
+                    ? 'Start Exam'
+                    : reviewReady
+                      ? 'View Results'
+                      : item.runtimeState === 'upcoming'
+                        ? 'Upcoming'
+                        : 'Result Not Declared Yet';
+
+                  return (
                   <article key={item._id} className="rounded-lg border border-white/10 bg-[#0b0b0b] p-3">
                     <h3 className="text-sm font-semibold text-white">{item.title}</h3>
                     <p className="mt-1 text-xs text-white/60">{item.problems?.length || 0} problems · {item.runtimeState}</p>
                     <p className="mt-1 text-xs text-white/60">Starts: {new Date(item.startTime).toLocaleString()}</p>
                     <p className="mt-1 text-xs text-white/60">Duration: {item.totalDuration} min</p>
-                    <button type="button" onClick={() => startSelectedExam(item._id)} disabled={isLoadingExam || item.runtimeState !== 'ongoing'} className="mt-3 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">{isLoadingExam ? 'Starting...' : item.runtimeState === 'ongoing' ? 'Start Exam' : item.runtimeState === 'upcoming' ? 'Upcoming' : 'Ended'}</button>
+                    <button
+                      type="button"
+                      onClick={() => (item.runtimeState === 'ongoing' ? startSelectedExam(item._id) : reviewReady ? openExamResults(item._id) : null)}
+                      disabled={isLoadingExam || (item.runtimeState !== 'ongoing' && !reviewReady)}
+                      className="mt-3 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+                    >
+                      {isLoadingExam ? 'Loading...' : buttonLabel}
+                    </button>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
