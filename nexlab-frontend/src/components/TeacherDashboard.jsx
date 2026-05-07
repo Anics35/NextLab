@@ -329,7 +329,11 @@ function TeacherDashboard() {
   };
 
   const handleOverrideScore = async (submissionId, problemId) => {
-    const nextScore = Number(scoreDrafts[`${submissionId}_${problemId}`]);
+    const draftKey = `${submissionId}_${problemId}`;
+    const fallbackScore = selectedProblem && String(selectedProblem.problemId?._id || selectedProblem.problemId) === String(problemId)
+      ? selectedProblem.score
+      : 0;
+    const nextScore = Number(scoreDrafts[draftKey] ?? fallbackScore ?? 0);
     if (!Number.isFinite(nextScore) || nextScore < 0) {
       toast.error('Enter a valid score.');
       return;
@@ -351,18 +355,47 @@ function TeacherDashboard() {
     }
   };
 
+  const persistResultVisibility = async (visible) => {
+    if (!selectedExamId) {
+      toast.error('Select an exam first.');
+      return;
+    }
+
+    setIsFinalizingMarks(true);
+    try {
+      const response = await updateExam(selectedExamId, {
+        showResultsImmediately: visible,
+        resultVisibility: visible ? 'immediate' : 'manual',
+        resultsVisible: visible
+      });
+      setShowMarksImmediately(visible);
+      setCourseExams((prev) => prev.map((exam) => (
+        exam._id === selectedExamId ? { ...exam, ...(response.exam || {}), resultsVisible: visible, showResultsImmediately: visible, resultVisibility: visible ? 'immediate' : 'manual' } : exam
+      )));
+      toast.success(visible ? 'Results are visible to students.' : 'Results are hidden from students.');
+    } catch (error) {
+      toast.error(error.message || 'Unable to update result visibility.');
+    } finally {
+      setIsFinalizingMarks(false);
+    }
+  };
+
   const finalizeMarks = async () => {
     if (!selectedExamId) return;
     setIsFinalizingMarks(true);
     try {
-      await updateExam(selectedExamId, {
+      const response = await updateExam(selectedExamId, {
         marksFinalized: true,
-        showResultsImmediately: showMarksImmediately,
-        resultVisibility: showMarksImmediately ? 'immediate' : 'manual',
-        resultsVisible: showMarksImmediately
+        showResultsImmediately: true,
+        resultVisibility: 'immediate',
+        resultsVisible: true
       });
+      setShowMarksImmediately(true);
+      setCourseExams((prev) => prev.map((exam) => (
+        exam._id === selectedExamId ? { ...exam, ...(response.exam || {}), marksFinalized: true, showResultsImmediately: true, resultVisibility: 'immediate', resultsVisible: true } : exam
+      )));
       toast.success('Marks finalized.');
-      await loadCourseExams(selectedCourseId);
+      await loadSubmissions(selectedExamId);
     } catch (error) {
       toast.error(error.message || 'Finalize endpoint unavailable for this exam state.');
     } finally {
@@ -489,7 +522,7 @@ function TeacherDashboard() {
         <section className={`${cardClass} mb-4`}>
           <h2 className="text-lg font-semibold mb-4">Results</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><select className={inputClass} value={selectedCourseId} onChange={(event) => setSelectedCourseId(event.target.value)}><option value="">Select course</option>{courses.map((course) => <option key={course._id} value={course._id}>{course.title}</option>)}</select><select className={inputClass} value={selectedExamId} onChange={(event) => setSelectedExamId(event.target.value)}><option value="">Select exam</option>{courseExams.map((exam) => <option key={exam._id} value={exam._id}>{exam.title}</option>)}</select></div>
-          <div className="flex items-center gap-4 mb-4"><button type="button" onClick={() => setShowMarksImmediately((prev) => !prev)} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500">{showMarksImmediately ? 'Results Visible' : 'Results Hidden'}</button><button type="button" onClick={finalizeMarks} disabled={isFinalizingMarks || !selectedExamId} className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500 disabled:opacity-50 inline-flex items-center gap-2">{isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{isFinalizingMarks ? 'Finalizing...' : 'Finalize Marks'}</button></div>
+          <div className="flex items-center gap-4 mb-4"><button type="button" onClick={() => persistResultVisibility(!showMarksImmediately)} disabled={isFinalizingMarks || !selectedExamId} className={`${showMarksImmediately ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 hover:bg-gray-600'} text-white px-4 py-2 rounded-md disabled:opacity-50`}>{showMarksImmediately ? 'Results Visible' : 'Results Hidden'}</button><button type="button" onClick={finalizeMarks} disabled={isFinalizingMarks || !selectedExamId} className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500 disabled:opacity-50 inline-flex items-center gap-2">{isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{isFinalizingMarks ? 'Saving...' : 'Finalize Marks'}</button></div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4"><p className="mb-4">Students</p><div className="flex flex-col gap-4 max-h-96 overflow-y-auto">{submissionsLoading ? <p className="text-gray-400">Loading...</p> : null}{!submissionsLoading && studentRows.length === 0 ? <p className="text-gray-400">No submissions found.</p> : null}{studentRows.map((student) => <button key={student._id} type="button" onClick={() => setSelectedSubmissionId(student._id)} className={`text-left bg-[#111] border rounded-md p-3 ${selectedSubmissionId === student._id ? 'border-[#ffa116]' : 'border-gray-800 hover:bg-[#1a1a1a]'}`}><p className="font-medium">{student.name}</p><p className="text-sm text-gray-400">{student.rollNumber} · Semester {student.semester}</p><p className="text-sm text-gray-300">Score {student.totalScore.toFixed(2)}</p></button>)}</div></div>
             <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">

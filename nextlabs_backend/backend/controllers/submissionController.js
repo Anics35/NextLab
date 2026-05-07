@@ -1,4 +1,5 @@
 const Submission = require("../models/Submission");
+const ExamAttempt = require("../models/ExamAttempt");
 const { createApiError } = require("../utils/apiError");
 const { isValidObjectId } = require("../utils/validators");
 
@@ -124,6 +125,20 @@ async function overrideSubmissionProblemScore(req, res, next) {
     problem.score = Number(numericScore.toFixed(2));
     problem.manualOverride = true;
     await submission.save();
+
+    if (submission.examAttemptId) {
+      const attempt = await ExamAttempt.findById(submission.examAttemptId);
+      if (attempt) {
+        const answer = attempt.answers.find((item) => String(item.problemId) === String(problemId));
+        if (answer) {
+          answer.score = Number(numericScore.toFixed(2));
+          answer.finalScore = Number(numericScore.toFixed(2));
+          answer.manualOverride = true;
+          attempt.totalScore = attempt.answers.reduce((sum, item) => sum + Number(item.finalScore ?? item.score ?? 0), 0);
+          await attempt.save();
+        }
+      }
+    }
 
     res.json({ success: true, submission });
   } catch (error) {

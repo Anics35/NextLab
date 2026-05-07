@@ -49,7 +49,7 @@ export const getExamById = (examId) =>
   request(api.get(`/exam/${examId}`), 'Unable to load exam.');
 
 export const updateExam = (examId, payload) =>
-  request(api.patch(`/exam/${examId}`, payload), 'Unable to update exam.');
+  request(api.put(`/exam/${examId}`, payload), 'Unable to update exam.');
 
 export const createExam = (payload) =>
   request(api.post('/exam/create', payload), 'Unable to publish exam.');
