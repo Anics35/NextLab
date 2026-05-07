@@ -5,6 +5,7 @@ import { CheckCircle2, FileText, LoaderCircle, LogOut, Play, Save, Search } from
 
 import { logout } from '../services/authService';
 import { getProblems, runCode } from '../services/codeService';
+import ProctorAlerts from './ProctorAlerts';
 import {
   createCourse,
   createExam,
@@ -72,6 +73,8 @@ function TeacherDashboard() {
   const [showMarksImmediately, setShowMarksImmediately] = useState(true);
   const [isFinalizingMarks, setIsFinalizingMarks] = useState(false);
   const [proctorAlerts, setProctorAlerts] = useState([]);
+  const [isProctorAlertsOpen, setIsProctorAlertsOpen] = useState(false);
+  const [selectedProctorStudent, setSelectedProctorStudent] = useState(null);
   const [teacherInput, setTeacherInput] = useState('');
   const [teacherOutput, setTeacherOutput] = useState('');
   const [isTeacherRunning, setIsTeacherRunning] = useState(false);
@@ -524,7 +527,7 @@ function TeacherDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><select className={inputClass} value={selectedCourseId} onChange={(event) => setSelectedCourseId(event.target.value)}><option value="">Select course</option>{courses.map((course) => <option key={course._id} value={course._id}>{course.title}</option>)}</select><select className={inputClass} value={selectedExamId} onChange={(event) => setSelectedExamId(event.target.value)}><option value="">Select exam</option>{courseExams.map((exam) => <option key={exam._id} value={exam._id}>{exam.title}</option>)}</select></div>
           <div className="flex items-center gap-4 mb-4"><button type="button" onClick={() => persistResultVisibility(!showMarksImmediately)} disabled={isFinalizingMarks || !selectedExamId} className={`${showMarksImmediately ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 hover:bg-gray-600'} text-white px-4 py-2 rounded-md disabled:opacity-50`}>{showMarksImmediately ? 'Results Visible' : 'Results Hidden'}</button><button type="button" onClick={finalizeMarks} disabled={isFinalizingMarks || !selectedExamId} className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500 disabled:opacity-50 inline-flex items-center gap-2">{isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{isFinalizingMarks ? 'Saving...' : 'Finalize Marks'}</button></div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4"><p className="mb-4">Students</p><div className="flex flex-col gap-4 max-h-96 overflow-y-auto">{submissionsLoading ? <p className="text-gray-400">Loading...</p> : null}{!submissionsLoading && studentRows.length === 0 ? <p className="text-gray-400">No submissions found.</p> : null}{studentRows.map((student) => <button key={student._id} type="button" onClick={() => setSelectedSubmissionId(student._id)} className={`text-left bg-[#111] border rounded-md p-3 ${selectedSubmissionId === student._id ? 'border-[#ffa116]' : 'border-gray-800 hover:bg-[#1a1a1a]'}`}><p className="font-medium">{student.name}</p><p className="text-sm text-gray-400">{student.rollNumber} · Semester {student.semester}</p><p className="text-sm text-gray-300">Score {student.totalScore.toFixed(2)}</p></button>)}</div></div>
+            <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4"><p className="mb-4">Students</p><div className="flex flex-col gap-4 max-h-96 overflow-y-auto">{submissionsLoading ? <p className="text-gray-400">Loading...</p> : null}{!submissionsLoading && studentRows.length === 0 ? <p className="text-gray-400">No submissions found.</p> : null}{studentRows.map((student) => <div key={student._id} className="bg-[#111] border border-gray-800 rounded-md p-3"><button type="button" onClick={() => setSelectedSubmissionId(student._id)} className={`w-full text-left pb-2 border-b border-gray-700 mb-2 ${selectedSubmissionId === student._id ? 'border-[#ffa116]' : ''}`}><p className="font-medium">{student.name}</p><p className="text-sm text-gray-400">{student.rollNumber} · Semester {student.semester}</p><p className="text-sm text-gray-300">Score {student.totalScore.toFixed(2)}</p></button><button type="button" onClick={() => { setSelectedProctorStudent({ id: student.studentId, name: student.name, examId: selectedExamId }); setIsProctorAlertsOpen(true); }} className="w-full bg-[#ffa116] text-black text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-orange-500 transition-colors">View Proctor Alerts</button></div>)}</div></div>
             <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
               <p className="mb-4">Submission Details</p>
               {!selectedStudent ? <p className="text-gray-400">Select a student.</p> : null}
@@ -635,6 +638,14 @@ function TeacherDashboard() {
           />
         </div>
       ) : null}
+
+      <ProctorAlerts
+        examId={selectedProctorStudent?.examId}
+        studentId={selectedProctorStudent?.id}
+        studentName={selectedProctorStudent?.name}
+        isOpen={isProctorAlertsOpen}
+        onClose={() => setIsProctorAlertsOpen(false)}
+      />
     </AppLayout>
   );
 }

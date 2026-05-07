@@ -105,4 +105,16 @@ export const getExamAnalytics = (examId, params = {}) =>
     'Unable to load analytics.'
   );
 
+export const getProctorEventsByExam = (examId) =>
+  request(
+    api.get(`/proctor/exam/${examId}`),
+    'Unable to load proctor events.'
+  );
+
+export const getActivityByStudent = (studentId, filters = {}) =>
+  request(
+    api.get(`/activity`, { params: { studentId, ...filters } }),
+    'Unable to load student activity.'
+  );
+
 export default api;
