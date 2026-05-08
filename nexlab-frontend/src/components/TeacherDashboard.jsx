@@ -10,11 +10,13 @@ import {
   createCourse,
   createExam,
   createProblem,
+  getCourseById,
   getCourseExams,
   getMyCourses,
   getStudentAttempt,
   getSubmissionsByExam,
   overrideSubmissionScore,
+  updateCourse,
   updateExam
 } from '../services/api';
 import AppLayout from './layout/AppLayout';
@@ -41,6 +43,11 @@ function TeacherDashboard() {
   const [courses, setCourses] = useState([]);
   const [problems, setProblems] = useState([]);
   const [courseExams, setCourseExams] = useState([]);
+  const [selectedCourseDetail, setSelectedCourseDetail] = useState(null);
+  const [courseDetailLoading, setCourseDetailLoading] = useState(false);
+  const [isEditingCourse, setIsEditingCourse] = useState(false);
+  const [courseEditForm, setCourseEditForm] = useState(DEFAULT_COURSE_FORM);
+  const [isSavingCourse, setIsSavingCourse] = useState(false);
 
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedExamId, setSelectedExamId] = useState('');
@@ -114,6 +121,31 @@ function TeacherDashboard() {
       setSelectedExamId((prev) => (exams.some((exam) => exam._id === prev) ? prev : (exams[0]?._id || '')));
     } catch (error) {
       toast.error(error.message || 'Unable to load exams.');
+    }
+  }, []);
+
+  const loadCourseDetail = useCallback(async (courseId) => {
+    if (!courseId) {
+      setSelectedCourseDetail(null);
+      setIsEditingCourse(false);
+      return;
+    }
+
+    setCourseDetailLoading(true);
+    try {
+      const data = await getCourseById(courseId);
+      const course = data.course || null;
+      setSelectedCourseDetail(course);
+      setCourseEditForm({
+        title: course?.title || '',
+        description: course?.description || '',
+        courseCode: course?.courseCode || ''
+      });
+      setIsEditingCourse(false);
+    } catch (error) {
+      toast.error(error.message || 'Unable to load course details.');
+    } finally {
+      setCourseDetailLoading(false);
     }
   }, []);
 
@@ -258,6 +290,54 @@ function TeacherDashboard() {
     } finally {
       setCreatingCourse(false);
     }
+  };
+
+  const handleOpenCourseDetail = async (courseId) => {
+    setSelectedCourseId(courseId);
+    setActiveTab('courses');
+    await loadCourseDetail(courseId);
+  };
+
+  const handleSaveCourse = async () => {
+    if (!selectedCourseDetail?._id) {
+      toast.error('Select a course first.');
+      return;
+    }
+
+    if (!courseEditForm.title.trim() || !courseEditForm.courseCode.trim()) {
+      toast.error('Course title and code are required.');
+      return;
+    }
+
+    setIsSavingCourse(true);
+    try {
+      const response = await updateCourse(selectedCourseDetail._id, {
+        title: courseEditForm.title.trim(),
+        description: courseEditForm.description,
+        courseCode: courseEditForm.courseCode
+      });
+      const updatedCourse = response.course || null;
+      if (updatedCourse) {
+        setSelectedCourseDetail(updatedCourse);
+        setCourseEditForm({
+          title: updatedCourse.title || '',
+          description: updatedCourse.description || '',
+          courseCode: updatedCourse.courseCode || ''
+        });
+        setCourses((prev) => prev.map((course) => (course._id === updatedCourse._id ? { ...course, ...updatedCourse } : course)));
+      }
+      setIsEditingCourse(false);
+      toast.success('Course updated.');
+    } catch (error) {
+      toast.error(error.message || 'Unable to update course.');
+    } finally {
+      setIsSavingCourse(false);
+    }
+  };
+
+  const closeCourseDetail = () => {
+    setSelectedCourseDetail(null);
+    setIsEditingCourse(false);
   };
 
   const handleCreateProblem = async () => {
@@ -442,28 +522,98 @@ function TeacherDashboard() {
       <Toaster position="top-right" />
 
       {activeTab === 'courses' ? (
-        <section className={`${cardClass} mb-4`}>
-          <h2 className="text-lg font-semibold mb-4">Courses</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <input className={inputClass} value={courseForm.title} onChange={(event) => setCourseForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Course title" />
-            <input className={inputClass} value={courseForm.courseCode} onChange={(event) => setCourseForm((prev) => ({ ...prev, courseCode: event.target.value.toUpperCase() }))} placeholder="Course code" />
-            <button type="button" onClick={handleCreateCourse} disabled={creatingCourse} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center justify-center gap-2">{creatingCourse ? <LoaderCircle size={14} className="animate-spin" /> : null}{creatingCourse ? 'Creating...' : 'Create Course'}</button>
+        selectedCourseDetail ? (
+          <section className={`${cardClass} mb-4`}>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg font-semibold">Course Students</h2>
+              <p className="text-sm text-gray-400">View enrolled students and edit course details.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={closeCourseDetail} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-600">Back</button>
+              <button type="button" onClick={() => setIsEditingCourse((prev) => !prev)} className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500">
+                {isEditingCourse ? 'Close Edit' : 'Edit Course'}
+              </button>
+            </div>
           </div>
-          <textarea className={`${inputClass} resize-none mb-4`} rows={3} value={courseForm.description} onChange={(event) => setCourseForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Course description" />
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {coursesLoading ? <p className="text-gray-400">Loading courses...</p> : null}
-            {!coursesLoading && courses.length === 0 ? <p className="text-gray-400">No courses found.</p> : null}
-            {courses.map((course) => (
-              <article key={course._id} className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
-                <p className="text-white font-semibold mb-4">{course.title}</p>
-                <p className="text-sm text-gray-400">Invite code</p>
-                <p className="text-[#ffa116] mb-4">{course.inviteCode || '-'}</p>
-                <p className="text-sm text-gray-400 mb-4">Students: {course.students?.length || 0}</p>
-                <button type="button" className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500" onClick={() => setSelectedCourseId(course._id)}>Select</button>
-              </article>
-            ))}
-          </div>
+
+          {courseDetailLoading ? (
+            <p className="text-gray-400">Loading course details...</p>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_1.2fr] gap-4">
+              <div className="space-y-4">
+                <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-1">Course title</p>
+                  <h3 className="text-xl font-semibold text-white">{selectedCourseDetail.title}</h3>
+                  <p className="text-sm text-gray-400 mt-3">Course code</p>
+                  <p className="text-[#ffa116] font-semibold">{selectedCourseDetail.courseCode}</p>
+                  <p className="text-sm text-gray-400 mt-3">Invite code</p>
+                  <p className="text-green-400 font-semibold">{selectedCourseDetail.inviteCode || '-'}</p>
+                  <p className="text-sm text-gray-400 mt-3">Students enrolled</p>
+                  <p className="text-white font-semibold">{selectedCourseDetail.students?.length || 0}</p>
+                </div>
+
+                {isEditingCourse ? (
+                  <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-lg font-semibold text-white">Edit Course</h3>
+                    <input className={inputClass} value={courseEditForm.title} onChange={(event) => setCourseEditForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Course title" />
+                    <input className={inputClass} value={courseEditForm.courseCode} onChange={(event) => setCourseEditForm((prev) => ({ ...prev, courseCode: event.target.value.toUpperCase() }))} placeholder="Course code" />
+                    <textarea className={`${inputClass} resize-none`} rows={4} value={courseEditForm.description} onChange={(event) => setCourseEditForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Course description" />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handleSaveCourse} disabled={isSavingCourse} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center gap-2">
+                        {isSavingCourse ? <LoaderCircle size={14} className="animate-spin" /> : null}
+                        {isSavingCourse ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button type="button" onClick={() => setIsEditingCourse(false)} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-600">Cancel</button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Student List</h3>
+                <div className="space-y-3 max-h-130 overflow-y-auto pr-1">
+                  {(selectedCourseDetail.students || []).length === 0 ? (
+                    <p className="text-gray-400">No students have joined this course yet.</p>
+                  ) : selectedCourseDetail.students.map((student) => (
+                    <div key={student._id} className="rounded-lg border border-gray-800 bg-[#111] p-4 flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-white">{student.name || 'Student'}</p>
+                        <p className="text-sm text-gray-400">Roll No: {student.rollNumber || '-'}</p>
+                        <p className="text-sm text-gray-400">Semester: {student.semester || '-'}</p>
+                      </div>
+                      <span className="text-xs rounded-full bg-white/5 border border-white/10 px-2 py-1 text-gray-300">{student.email || 'No email'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
+        ) : (
+          <section className={`${cardClass} mb-4`}>
+            <h2 className="text-lg font-semibold mb-4">Courses</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <input className={inputClass} value={courseForm.title} onChange={(event) => setCourseForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Course title" />
+              <input className={inputClass} value={courseForm.courseCode} onChange={(event) => setCourseForm((prev) => ({ ...prev, courseCode: event.target.value.toUpperCase() }))} placeholder="Course code" />
+              <button type="button" onClick={handleCreateCourse} disabled={creatingCourse} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center justify-center gap-2">{creatingCourse ? <LoaderCircle size={14} className="animate-spin" /> : null}{creatingCourse ? 'Creating...' : 'Create Course'}</button>
+            </div>
+            <textarea className={`${inputClass} resize-none mb-4`} rows={3} value={courseForm.description} onChange={(event) => setCourseForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Course description" />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {coursesLoading ? <p className="text-gray-400">Loading courses...</p> : null}
+              {!coursesLoading && courses.length === 0 ? <p className="text-gray-400">No courses found.</p> : null}
+              {courses.map((course) => (
+                <article key={course._id} className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
+                  <p className="text-white font-semibold mb-4">{course.title}</p>
+                  <p className="text-sm text-gray-400">Invite code</p>
+                  <p className="text-[#ffa116] mb-4">{course.inviteCode || '-'}</p>
+                  <p className="text-sm text-gray-400 mb-4">Students: {course.students?.length || 0}</p>
+                  <button type="button" className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500" onClick={() => handleOpenCourseDetail(course._id)}>Select</button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )
       ) : null}
 
       {activeTab === 'question-bank' ? (

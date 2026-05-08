@@ -42,6 +42,9 @@ export const getMyCourses = () =>
 export const getCourseById = (courseId) =>
   request(api.get(`/course/${courseId}`), 'Unable to load course details.');
 
+export const updateCourse = (courseId, payload) =>
+  request(api.put(`/course/${courseId}`, payload), 'Unable to update course.');
+
 export const getCourseExams = (courseId) =>
   request(api.get(`/exam/course/${courseId}`), 'Unable to load course exams.');
 

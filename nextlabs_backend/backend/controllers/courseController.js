@@ -130,4 +130,57 @@ async function getCourse(req, res, next) {
   }
 }
 
-module.exports = { createCourse, getCourse, joinCourse, listMyCourses };
+async function updateCourse(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { title, description = "", courseCode } = req.body;
+
+    if (!isValidObjectId(id)) {
+      throw createApiError(400, "Course id must be a valid MongoDB ObjectId", "INVALID_COURSE_ID");
+    }
+
+    const course = await Course.findById(id);
+    if (!course) {
+      throw createApiError(404, "Course not found", "COURSE_NOT_FOUND");
+    }
+
+    if (String(course.teacherId) !== req.user.id) {
+      throw createApiError(403, "Only the course teacher can edit this course", "FORBIDDEN");
+    }
+
+    if (!isBlank(title)) {
+      course.title = String(title).trim();
+    }
+
+    course.description = String(description || "").trim();
+
+    if (!isBlank(courseCode)) {
+      const normalizedCourseCode = normalizeCourseCode(courseCode);
+      if (!/^[A-Z0-9_-]{4,20}$/.test(normalizedCourseCode)) {
+        throw createApiError(
+          400,
+          "courseCode must be 4-20 characters and can contain letters, numbers, underscore or hyphen",
+          "INVALID_COURSE_CODE"
+        );
+      }
+
+      const existingCode = await Course.exists({ courseCode: normalizedCourseCode, _id: { $ne: course._id } });
+      if (existingCode) {
+        throw createApiError(409, "courseCode is already used by another course", "COURSE_CODE_EXISTS");
+      }
+
+      course.courseCode = normalizedCourseCode;
+    }
+
+    await course.save();
+    const updatedCourse = await Course.findById(course._id)
+      .populate("teacherId", "name email")
+      .populate("students", "name email role rollNumber semester");
+
+    res.json({ success: true, course: updatedCourse });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createCourse, getCourse, joinCourse, listMyCourses, updateCourse };
