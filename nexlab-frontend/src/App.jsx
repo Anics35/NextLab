@@ -236,6 +236,14 @@ function App() {
   const startSelectedExam = useCallback((examId) => loadExamSession(examId, { reviewMode: false }), [loadExamSession]);
   const openExamResults = useCallback((examId) => loadExamSession(examId, { reviewMode: true }), [loadExamSession]);
 
+  const returnToDashboard = useCallback(() => {
+    const selectedCourse = activeCourse;
+    resetExamSession();
+    if (selectedCourse?._id) {
+      void loadCourseExams(selectedCourse);
+    }
+  }, [activeCourse, loadCourseExams, resetExamSession]);
+
   const updateCurrentProblemState = useCallback((patch) => {
     if (!currentProblemId) return;
     setProblemStates((prev) => ({ ...prev, [currentProblemId]: { ...buildProblemState(currentProblem), ...prev[currentProblemId], ...patch } }));
@@ -270,10 +278,31 @@ function App() {
       const response = await finalizeExamAttempt(examId);
       setAttempt(response.attempt || null);
       toast[trigger === 'timeout' ? 'error' : 'success'](trigger === 'timeout' ? 'Time is over. Exam submitted automatically.' : 'Exam submitted successfully.');
+
+      if (trigger === 'manual') {
+        returnToDashboard();
+      }
     } catch (error) {
       toast.error(error.message || 'Unable to finalize exam.');
+      autoFinalizeRef.current = false;
+      setIsExamLocked(false);
     }
   };
+
+  const handleCloseExamView = useCallback(() => {
+    if (!exam) return;
+
+    if (!isExamLocked && isExamStarted) {
+      const shouldSubmit = window.confirm('This exam is still ongoing. Do you want to submit and close it?');
+      if (!shouldSubmit) {
+        return;
+      }
+      void finalizeExamSession('manual');
+      return;
+    }
+
+    returnToDashboard();
+  }, [exam, finalizeExamSession, isExamLocked, isExamStarted, returnToDashboard]);
 
   const submitCurrentProblem = async (editorCode) => {
     if (!examId || !currentProblemId || isExamLocked || isSubmitting) return;
@@ -421,7 +450,10 @@ function App() {
         <div className="h-screen flex flex-col">
           <div className="h-12 border-b border-white/10 bg-[#0b0b0b] px-4 flex items-center justify-between">
             <div className="text-sm text-white/80">{exam.title}</div>
-            <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleCloseExamView} className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/15">Close</button>
+              <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
+            </div>
           </div>
 
           {showResultPanel ? (
