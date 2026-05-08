@@ -507,13 +507,38 @@ function TeacherDashboard() {
             <input className={inputClass} value={examForm.title} onChange={(event) => setExamForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Exam title" />
             <select className={inputClass} value={examForm.courseId} onChange={(event) => setExamForm((prev) => ({ ...prev, courseId: event.target.value }))}><option value="">Select course</option>{courses.map((course) => <option key={course._id} value={course._id}>{course.title}</option>)}</select>
             <textarea className={`${inputClass} resize-none md:col-span-2`} rows={3} value={examForm.instructions} onChange={(event) => setExamForm((prev) => ({ ...prev, instructions: event.target.value }))} placeholder="Instructions" />
-            {examForm.timerType === 'global' ? <input className={inputClass} type="number" min="1" value={examForm.duration} onChange={(event) => setExamForm((prev) => ({ ...prev, duration: event.target.value }))} placeholder="Duration (minutes)" /> : <div />}
+            {examForm.timerType === 'global' ? (
+              <div>
+                <input className={inputClass} type="number" min="1" value={examForm.duration} onChange={(event) => setExamForm((prev) => ({ ...prev, duration: event.target.value }))} placeholder="Duration (minutes)" />
+                <p className="text-xs text-gray-400 mt-1">Global duration in minutes — applies to the whole exam.</p>
+              </div>
+            ) : <div />}
             <select className={inputClass} value={examForm.timerType} onChange={(event) => setExamForm((prev) => ({ ...prev, timerType: event.target.value }))}><option value="global">Global</option><option value="per_problem">Per Problem</option></select>
           </div>
           <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 mb-4"><p className="text-sm text-gray-300 mb-4">Problems</p><div className="max-h-60 overflow-y-auto flex flex-col gap-4">
             {filteredProblems.map((problem) => {
               const checked = Boolean(selectedProblemMap[problem._id]);
-              return <div key={problem._id} className="flex justify-between items-center bg-[#0a0a0a] p-3 rounded-md border border-gray-800 gap-4"><div className="flex items-center gap-4 flex-1"><input type="checkbox" checked={checked} onChange={() => toggleProblem(problem._id)} /><span className="text-white">{problem.title || 'Untitled'}</span></div><span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>{problem.difficulty || 'Unknown'}</span>{checked ? <div className="flex gap-2"><input className="w-24 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-white" type="number" min="1" value={selectedProblemMap[problem._id]?.marks || 10} onChange={(e) => setSelectedProblemMap((prev) => ({ ...prev, [problem._id]: { ...prev[problem._id], marks: e.target.value } }))} placeholder="Marks" />{examForm.timerType === 'per_problem' ? <input className="w-24 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-white" type="number" min="1" value={selectedProblemMap[problem._id]?.duration || 30} onChange={(e) => setSelectedProblemMap((prev) => ({ ...prev, [problem._id]: { ...prev[problem._id], duration: e.target.value } }))} placeholder="Min" /> : null}</div> : null}</div>;
+              return <div key={problem._id} className="flex justify-between items-center bg-[#0a0a0a] p-3 rounded-md border border-gray-800 gap-4">
+                <div className="flex items-center gap-4 flex-1">
+                  <input type="checkbox" checked={checked} onChange={() => toggleProblem(problem._id)} />
+                  <span className="text-white">{problem.title || 'Untitled'}</span>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>{problem.difficulty || 'Unknown'}</span>
+                {checked ? (
+                  <div className="flex gap-3 items-end">
+                    <div className="flex flex-col">
+                      <label className="text-xs text-gray-400 mb-1">Marks</label>
+                      <input className="w-28 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-white" type="number" min="1" value={selectedProblemMap[problem._id]?.marks || 10} onChange={(e) => setSelectedProblemMap((prev) => ({ ...prev, [problem._id]: { ...prev[problem._id], marks: e.target.value } }))} placeholder="Marks" />
+                    </div>
+                    {examForm.timerType === 'per_problem' ? (
+                      <div className="flex flex-col">
+                        <label className="text-xs text-gray-400 mb-1">Time (min)</label>
+                        <input className="w-28 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-white" type="number" min="1" value={selectedProblemMap[problem._id]?.duration || 30} onChange={(e) => setSelectedProblemMap((prev) => ({ ...prev, [problem._id]: { ...prev[problem._id], duration: e.target.value } }))} placeholder="Minutes" />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>;
             })}
             {!filteredProblems.length ? <p className="text-gray-400">No problems available.</p> : null}
           </div></div>
