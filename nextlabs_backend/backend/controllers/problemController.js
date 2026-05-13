@@ -138,4 +138,133 @@ async function createProblem(req, res, next) {
   }
 }
 
-module.exports = { createProblem, getProblem, listProblems };
+async function updateProblem(req, res, next) {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      throw createApiError(400, "Problem id must be a valid MongoDB ObjectId", "INVALID_PROBLEM_ID");
+    }
+
+    const existingProblem = await Problem.findById(id);
+    if (!existingProblem) {
+      throw createApiError(404, "Problem not found", "PROBLEM_NOT_FOUND");
+    }
+
+    if (String(existingProblem.createdBy) !== String(req.user.id)) {
+      throw createApiError(403, "You can only update your own problems", "FORBIDDEN");
+    }
+
+    const {
+      title,
+      description,
+      difficulty = existingProblem.difficulty,
+      publicTestCases = existingProblem.publicTestCases,
+      hiddenTestCases = existingProblem.hiddenTestCases,
+      testCases = []
+    } = req.body;
+
+    if (isBlank(title) || isBlank(description)) {
+      throw createApiError(400, "title and description are required", "MISSING_FIELDS");
+    }
+
+    const legacyPublicCases = Array.isArray(testCases)
+      ? testCases.filter((testCase) => testCase.isPublic)
+      : [];
+    const legacyHiddenCases = Array.isArray(testCases)
+      ? testCases.filter((testCase) => !testCase.isPublic)
+      : [];
+    const effectivePublicCases = Array.isArray(publicTestCases) && publicTestCases.length > 0
+      ? publicTestCases
+      : legacyPublicCases;
+    const effectiveHiddenCases = Array.isArray(hiddenTestCases) && hiddenTestCases.length > 0
+      ? hiddenTestCases
+      : legacyHiddenCases;
+
+    if (effectivePublicCases.length + effectiveHiddenCases.length === 0) {
+      throw createApiError(400, "At least one test case is required", "MISSING_FIELDS");
+    }
+
+    const getExpectedOutput = (testCase) => toStringValue(testCase.output || testCase.expectedOutput, "");
+    const validateCase = (testCase) => (
+      typeof testCase !== "object" ||
+      testCase === null ||
+      isBlank(getExpectedOutput(testCase))
+    );
+
+    const invalidPublic = effectivePublicCases.findIndex(validateCase);
+    if (invalidPublic !== -1) {
+      throw createApiError(
+        400,
+        `publicTestCases[${invalidPublic}] must include output`,
+        "INVALID_TEST_CASE"
+      );
+    }
+
+    const invalidHidden = effectiveHiddenCases.findIndex(validateCase);
+    if (invalidHidden !== -1) {
+      throw createApiError(400, `hiddenTestCases[${invalidHidden}] must include output`, "INVALID_TEST_CASE");
+    }
+
+    existingProblem.title = title.trim();
+    existingProblem.description = description.trim();
+    existingProblem.difficulty = difficulty;
+    existingProblem.publicTestCases = effectivePublicCases.map((testCase) => ({
+      input: toStringValue(testCase.input),
+      output: getExpectedOutput(testCase).trim()
+    }));
+    existingProblem.hiddenTestCases = effectiveHiddenCases.map((testCase) => ({
+      input: toStringValue(testCase.input),
+      output: getExpectedOutput(testCase).trim()
+    }));
+    existingProblem.testCases = [
+      ...effectivePublicCases.map((testCase) => ({
+        input: toStringValue(testCase.input),
+        expectedOutput: getExpectedOutput(testCase).trim(),
+        isPublic: true
+      })),
+      ...effectiveHiddenCases.map((testCase) => ({
+        input: toStringValue(testCase.input),
+        expectedOutput: getExpectedOutput(testCase).trim(),
+        isPublic: false
+      }))
+    ];
+
+    const problem = await existingProblem.save();
+
+    res.json({
+      success: true,
+      problem
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteProblem(req, res, next) {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      throw createApiError(400, "Problem id must be a valid MongoDB ObjectId", "INVALID_PROBLEM_ID");
+    }
+
+    const existingProblem = await Problem.findById(id);
+    if (!existingProblem) {
+      throw createApiError(404, "Problem not found", "PROBLEM_NOT_FOUND");
+    }
+
+    if (String(existingProblem.createdBy) !== String(req.user.id)) {
+      throw createApiError(403, "You can only delete your own problems", "FORBIDDEN");
+    }
+
+    await existingProblem.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Problem deleted successfully"
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createProblem, getProblem, listProblems, updateProblem, deleteProblem };

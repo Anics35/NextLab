@@ -7,6 +7,7 @@ import { logout } from '../services/authService';
 import { getProblems, runCode } from '../services/codeService';
 import ProctorAlerts from './ProctorAlerts';
 import {
+  deleteProblem,
   createCourse,
   createExam,
   createProblem,
@@ -16,6 +17,7 @@ import {
   getStudentAttempt,
   getSubmissionsByExam,
   overrideSubmissionScore,
+  updateProblem,
   updateCourse,
   updateExam
 } from '../services/api';
@@ -68,6 +70,9 @@ function TeacherDashboard() {
     hiddenTestCases: [{ input: '', output: '' }]
   });
   const [isCreatingProblem, setIsCreatingProblem] = useState(false);
+  const [editingProblemId, setEditingProblemId] = useState('');
+  const [isSavingProblem, setIsSavingProblem] = useState(false);
+  const [isDeletingProblemId, setIsDeletingProblemId] = useState('');
 
   const [submissions, setSubmissions] = useState([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -366,6 +371,82 @@ function TeacherDashboard() {
     }
   };
 
+  const resetProblemForm = () => {
+    setProblemForm({
+      title: '',
+      description: '',
+      difficulty: 'easy',
+      publicTestCases: [{ input: '', output: '' }],
+      hiddenTestCases: [{ input: '', output: '' }]
+    });
+    setEditingProblemId('');
+  };
+
+  const handleEditProblem = (problem) => {
+    setEditingProblemId(problem._id);
+    setProblemForm({
+      title: problem.title || '',
+      description: problem.description || '',
+      difficulty: problem.difficulty || 'easy',
+      publicTestCases: (problem.publicTestCases || []).length
+        ? problem.publicTestCases.map((item) => ({ input: item.input || '', output: item.output || '' }))
+        : [{ input: '', output: '' }],
+      hiddenTestCases: (problem.hiddenTestCases || []).length
+        ? problem.hiddenTestCases.map((item) => ({ input: item.input || '', output: item.output || '' }))
+        : [{ input: '', output: '' }]
+    });
+    setActiveTab('question-bank');
+  };
+
+  const handleUpdateProblem = async () => {
+    if (!editingProblemId) {
+      toast.error('Select a problem to edit first.');
+      return;
+    }
+    if (!problemForm.title.trim() || !problemForm.description.trim()) {
+      toast.error('Problem title and description are required.');
+      return;
+    }
+
+    setIsSavingProblem(true);
+    try {
+      const payload = {
+        title: problemForm.title.trim(),
+        description: problemForm.description.trim(),
+        difficulty: problemForm.difficulty,
+        publicTestCases: problemForm.publicTestCases.filter((item) => String(item.output || '').trim()),
+        hiddenTestCases: problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim())
+      };
+      await updateProblem(editingProblemId, payload);
+      toast.success('Problem updated.');
+      await loadWorkspace();
+      resetProblemForm();
+    } catch (error) {
+      toast.error(error.message || 'Unable to update problem.');
+    } finally {
+      setIsSavingProblem(false);
+    }
+  };
+
+  const handleDeleteProblem = async (problem) => {
+    const shouldDelete = window.confirm(`Delete problem "${problem.title || 'Untitled'}"? This cannot be undone.`);
+    if (!shouldDelete) return;
+
+    setIsDeletingProblemId(problem._id);
+    try {
+      await deleteProblem(problem._id);
+      toast.success('Problem deleted.');
+      if (editingProblemId === problem._id) {
+        resetProblemForm();
+      }
+      await loadWorkspace();
+    } catch (error) {
+      toast.error(error.message || 'Unable to delete problem.');
+    } finally {
+      setIsDeletingProblemId('');
+    }
+  };
+
   const handlePublishExam = async () => {
     const selectedIds = Object.keys(selectedProblemMap);
     if (!examForm.title.trim() || !examForm.courseId || selectedIds.length === 0) {
@@ -619,6 +700,7 @@ function TeacherDashboard() {
       {activeTab === 'question-bank' ? (
         <section className={`${cardClass} mb-4`}>
           <h2 className="text-lg font-semibold mb-4">Question Bank</h2>
+          {editingProblemId ? <div className="mb-3 rounded-md border border-[#ffa116]/30 bg-[#ffa116]/10 px-3 py-2 text-sm text-[#ffcb6b]">Editing problem. Save changes or cancel to return to new problem mode.</div> : null}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <input className={inputClass} value={problemForm.title} onChange={(event) => setProblemForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Problem title" />
             <select className={inputClass} value={problemForm.difficulty} onChange={(event) => setProblemForm((prev) => ({ ...prev, difficulty: event.target.value }))}><option value="easy">easy</option><option value="medium">medium</option><option value="hard">hard</option></select>
@@ -638,14 +720,17 @@ function TeacherDashboard() {
               <div className="mt-2 flex gap-2"><button type="button" className="bg-[#ffa116] text-black px-3 py-1 rounded-md" onClick={() => setProblemForm((prev) => ({ ...prev, hiddenTestCases: [...prev.hiddenTestCases, { input: '', output: '' }] }))}>Add Hidden</button><button type="button" className="bg-gray-700 text-white px-3 py-1 rounded-md disabled:opacity-50" disabled={problemForm.hiddenTestCases.length <= 1} onClick={() => setProblemForm((prev) => ({ ...prev, hiddenTestCases: prev.hiddenTestCases.slice(0, -1) }))}>Remove Last</button></div>
             </div>
           </div>
-          <button type="button" onClick={handleCreateProblem} disabled={isCreatingProblem} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center gap-2 mb-4">{isCreatingProblem ? <LoaderCircle size={14} className="animate-spin" /> : null}{isCreatingProblem ? 'Adding...' : 'Add Problem'}</button>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button type="button" onClick={editingProblemId ? handleUpdateProblem : handleCreateProblem} disabled={isCreatingProblem || isSavingProblem} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center gap-2">{isCreatingProblem || isSavingProblem ? <LoaderCircle size={14} className="animate-spin" /> : null}{editingProblemId ? (isSavingProblem ? 'Saving...' : 'Save Problem') : (isCreatingProblem ? 'Adding...' : 'Add Problem')}</button>
+            {editingProblemId ? <button type="button" onClick={resetProblemForm} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-600">Cancel Edit</button> : null}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <label className="md:col-span-2 flex items-center gap-2 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2"><Search size={14} className="text-gray-400" /><input className="w-full bg-transparent outline-none text-white" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search problems" /></label>
             <select className={inputClass} value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}><option value="all">All</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredProblems.length === 0 ? <p className="text-gray-400">No problems found.</p> : null}
-            {filteredProblems.map((problem) => <div key={problem._id} className="bg-[#0a0a0a] p-3 rounded-md flex justify-between items-center gap-4"><span className="text-white">{problem.title || 'Untitled'}</span><span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>{problem.difficulty || 'Unknown'}</span></div>)}
+            {filteredProblems.map((problem) => <div key={problem._id} className="bg-[#0a0a0a] p-3 rounded-md flex flex-col gap-3 border border-gray-800"><div className="flex justify-between items-center gap-4"><span className="text-white">{problem.title || 'Untitled'}</span><span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>{problem.difficulty || 'Unknown'}</span></div><div className="flex gap-2"><button type="button" onClick={() => handleEditProblem(problem)} className="bg-[#ffa116] text-black px-3 py-1.5 rounded-md hover:bg-orange-500 text-sm">Edit</button><button type="button" onClick={() => handleDeleteProblem(problem)} disabled={isDeletingProblemId === problem._id} className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-500 disabled:opacity-50 text-sm inline-flex items-center gap-2">{isDeletingProblemId === problem._id ? <LoaderCircle size={14} className="animate-spin" /> : null}{isDeletingProblemId === problem._id ? 'Deleting...' : 'Delete'}</button></div></div>)}
           </div>
         </section>
       ) : null}

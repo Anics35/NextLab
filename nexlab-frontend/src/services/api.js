@@ -60,6 +60,12 @@ export const createExam = (payload) =>
 export const createProblem = (payload) =>
   request(api.post('/problems', payload), 'Unable to create problem.');
 
+export const updateProblem = (problemId, payload) =>
+  request(api.put(`/problems/${problemId}`, payload), 'Unable to update problem.');
+
+export const deleteProblem = (problemId) =>
+  request(api.delete(`/problems/${problemId}`), 'Unable to delete problem.');
+
 export const startExamAttempt = (examId) =>
   request(api.post('/exam-attempts/start', { examId }), 'Unable to start exam attempt.');
 
