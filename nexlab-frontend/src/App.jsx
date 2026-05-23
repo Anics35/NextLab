@@ -3,9 +3,9 @@ import { Toaster, toast } from 'react-hot-toast';
 import { AlertTriangle, BookOpen, FileText, LogOut, ShieldCheck } from 'lucide-react';
 
 import AuthForm from './components/AuthForm';
-import SecureIDE from './components/SecureIDE';
-import StudentDashboard from './components/StudentDashboard';
-import TeacherDashboard from './components/TeacherDashboard';
+import SecureIDE from './components/SecureIDE/SecureIDE';
+import StudentDashboard from './components/StudentDashboard/StudentDashboard';
+import TeacherDashboard from './components/TeacherDashboard/TeacherDashboard';
 import { logout } from './services/authService';
 import { runCode } from './services/codeService';
 import { finalizeExamAttempt, getCourseExams, getExamById, getMyAttempt, saveExamAttempt, startExamAttempt, submitExamAnswer } from './services/api';
@@ -76,10 +76,16 @@ function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [activeCourse, setActiveCourse] = useState(null);
+  const [activeCourse, setActiveCourse] = useState(() => {
+    const saved = localStorage.getItem('nextlab_active_course');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [courseExams, setCourseExams] = useState([]);
   const [courseExamsLoading, setCourseExamsLoading] = useState(false);
-  const [exam, setExam] = useState(null);
+  const [exam, setExam] = useState(() => {
+    const saved = localStorage.getItem('nextlab_current_exam');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [problems, setProblems] = useState([]);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
   const [submissions, setSubmissions] = useState({});
@@ -120,6 +126,43 @@ function App() {
     initSocket(localStorage.getItem('token'));
   }, [user]);
 
+  // Persist activeCourse to localStorage
+  useEffect(() => {
+    if (activeCourse) {
+      localStorage.setItem('nextlab_active_course', JSON.stringify(activeCourse));
+    }
+  }, [activeCourse]);
+
+  // Persist current exam to localStorage
+  useEffect(() => {
+    if (exam) {
+      localStorage.setItem('nextlab_current_exam', JSON.stringify(exam));
+    }
+  }, [exam]);
+
+  // When page reloads with activeCourse but no exam, load the courseExams
+  useEffect(() => {
+    if (!user || user.role === 'teacher') return;
+    if (!activeCourse) return;
+    // Only load courseExams if we don't have an exam in progress
+    // If exam is being restored, it will load its own data
+    if (exam) return; // Exam is already loaded/loading, don't fetch courseExams
+    
+    if (courseExams.length === 0 && !courseExamsLoading) {
+      // activeCourse was restored from localStorage and no exam is in progress
+      // Load the courseExams for this course
+      (async () => {
+        try {
+          const data = await getCourseExams(activeCourse._id);
+          if (data.serverTime) setServerTimeOffset(new Date(data.serverTime).getTime() - Date.now());
+          setCourseExams(data.exams || []);
+        } catch (error) {
+          setCourseExams([]);
+        }
+      })();
+    }
+  }, [user, activeCourse, exam, courseExams.length, courseExamsLoading]);
+
   const canReviewExam = useCallback((item) => Boolean(
     item?.marksFinalized === true &&
     (item?.resultsVisible === true || item?.showResultsImmediately === true || item?.resultVisibility === 'immediate')
@@ -128,6 +171,16 @@ function App() {
   useEffect(() => {
     const intervalId = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    // Clear all cached page state
+    localStorage.removeItem('nextlab_active_course');
+    localStorage.removeItem('nextlab_current_exam');
+    localStorage.removeItem('nextlab_problem_index');
+    localStorage.removeItem('nextlab_teacher_active_tab');
+    setUser(null);
   }, []);
 
   const handleKeyDown = useCallback((event) => {
@@ -452,7 +505,7 @@ function App() {
             <div className="text-sm text-white/80">{exam.title}</div>
             <div className="flex items-center gap-2">
               <button type="button" onClick={handleCloseExamView} className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/15">Close</button>
-              <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
+              <button type="button" onClick={handleLogout} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
             </div>
           </div>
 
@@ -511,7 +564,7 @@ function App() {
           <div className="rounded-xl border border-white/10 bg-[#101010] p-4">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-white/90"><ShieldCheck size={16} className="text-emerald-400" />Secure Student Mode</div>
-              <button type="button" onClick={() => { logout(); setUser(null); }} className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"><LogOut size={14} />Logout</button>
+              <button type="button" onClick={handleLogout} className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"><LogOut size={14} />Logout</button>
             </div>
             <StudentDashboard activeCourseId={activeCourse?._id} onSelectCourse={loadCourseExams} />
           </div>
