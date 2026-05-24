@@ -175,6 +175,24 @@ function App() {
     }
   }, [user, activeCourse, exam, courseExams.length, courseExamsLoading]);
 
+  useEffect(() => {
+    if (!user || user.role === 'teacher' || !activeCourse || exam) return;
+
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const data = await getCourseExams(activeCourse._id);
+          if (data.serverTime) setServerTimeOffset(new Date(data.serverTime).getTime() - Date.now());
+          setCourseExams(data.exams || []);
+        } catch {
+          // keep the current list if a refresh fails
+        }
+      })();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeCourse, exam, user]);
+
   const canReviewExam = useCallback((item) => Boolean(
     item?.marksFinalized === true &&
     (item?.resultsVisible === true || item?.showResultsImmediately === true || item?.resultVisibility === 'immediate')
@@ -573,16 +591,11 @@ function App() {
   }, [exam?._id, isExamLocked, problems, submissions, isExamStarted, finalizeExamSession]);
 
   const visibleCourseExams = useMemo(() => {
-    const serverNow = clockNow + serverTimeOffset;
     return courseExams.filter((item) => item.status !== 'draft').map((item) => {
-      const start = new Date(item.startTime).getTime();
-      const end = new Date(item.endTime).getTime();
-      let runtimeState = 'upcoming';
-      if (serverNow >= start && serverNow <= end) runtimeState = 'ongoing';
-      else if (serverNow > end) runtimeState = 'ended';
+      const runtimeState = item.status || 'published';
       return { ...item, runtimeState };
     });
-  }, [clockNow, courseExams, serverTimeOffset]);
+  }, [courseExams]);
 
   if (!user) return <AuthForm onAuthSuccess={setUser} />;
   if (user.role === 'teacher') return <TeacherDashboard />;
@@ -704,17 +717,19 @@ function App() {
                   const reviewReady = canReviewExam(item);
                   const buttonLabel = item.runtimeState === 'ongoing'
                     ? 'Start Exam'
-                    : reviewReady
+                    : item.runtimeState === 'published'
+                      ? 'Not Started Yet'
+                      : reviewReady
                       ? 'View Results'
-                      : item.runtimeState === 'upcoming'
-                        ? 'Upcoming'
-                        : 'Result Not Declared Yet';
+                      : 'Exam Ended';
 
                   return (
                   <article key={item._id} className="rounded-lg border border-white/10 bg-[#0b0b0b] p-3">
                     <h3 className="text-sm font-semibold text-white">{item.title}</h3>
                     <p className="mt-1 text-xs text-white/60">{item.problems?.length || 0} problems · {item.runtimeState}</p>
-                    <p className="mt-1 text-xs text-white/60">Starts: {new Date(item.startTime).toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-white/60">
+                      {item.runtimeState === 'published' ? 'Waiting for teacher to start the exam.' : `Starts: ${new Date(item.startTime).toLocaleString()}`}
+                    </p>
                     <p className="mt-1 text-xs text-white/60">Duration: {item.totalDuration} min</p>
                     <button
                       type="button"

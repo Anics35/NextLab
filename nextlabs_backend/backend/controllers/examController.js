@@ -5,19 +5,19 @@ const { createApiError } = require("../utils/apiError");
 const { isBlank, isValidObjectId } = require("../utils/validators");
 
 function resolveExamStatus(exam) {
-  const now = Date.now();
-  const start = new Date(exam.startTime).getTime();
-  const end = new Date(exam.endTime).getTime();
-
   if (exam.status === "draft") {
     return "draft";
   }
 
-  if (now < start) {
+  if (exam.status === "published") {
     return "published";
   }
 
-  if (now >= start && now <= end) {
+  if (exam.status === "ongoing") {
+    const end = new Date(exam.endTime).getTime();
+    if (Number.isFinite(end) && Date.now() > end) {
+      return "ended";
+    }
     return "ongoing";
   }
 
@@ -231,19 +231,35 @@ async function updateExam(req, res, next) {
     await assertTeacherOwnsCourse(exam.courseId, req.user.id);
 
     const finalizeOnly = ["marksFinalized", "showResultsImmediately", "resultVisibility", "resultsVisible"];
+    const statusOnly = ["status"];
     const editAllowed = ["title", "instructions", "totalDuration", "navigationControl", "startTime", "endTime", "timerType"];
     const requestedKeys = Object.keys(req.body || {});
     const isFinalizeRequest = requestedKeys.length > 0 && requestedKeys.every((key) => finalizeOnly.includes(key));
+    const isStatusRequest = requestedKeys.length > 0 && requestedKeys.every((key) => statusOnly.includes(key));
 
-    if (exam.status !== "draft" && !isFinalizeRequest) {
+    if (exam.status !== "draft" && !isFinalizeRequest && !isStatusRequest) {
       throw createApiError(409, "Published exams cannot be edited", "EXAM_LOCKED");
     }
 
-    const allowed = exam.status === "draft" ? [...editAllowed, ...finalizeOnly] : finalizeOnly;
+    const allowed = exam.status === "draft" ? [...editAllowed, ...finalizeOnly, ...statusOnly] : [...finalizeOnly, ...statusOnly];
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         exam[key] = req.body[key];
       }
+    }
+
+    if (req.body.status === "ongoing") {
+      const now = new Date();
+      const durationMinutes = Number(exam.duration || exam.totalDuration || exam.problems?.reduce((sum, item) => sum + Number(item.duration || 0), 0) || 0);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        throw createApiError(400, "Exam duration is required to start the exam", "INVALID_DURATION");
+      }
+      exam.startTime = now;
+      exam.endTime = new Date(now.getTime() + durationMinutes * 60 * 1000);
+    }
+
+    if (req.body.status === "ended") {
+      exam.endTime = new Date();
     }
 
     await exam.save();

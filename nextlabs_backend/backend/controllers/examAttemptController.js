@@ -27,7 +27,12 @@ async function loadExamForStudent(examId, studentId) {
 
 function assertExamOpen(exam) {
   const now = new Date();
-  if (now < exam.startTime) {
+
+  if (exam.status === "ended") {
+    throw createApiError(403, "Exam time is over", "EXAM_ENDED");
+  }
+
+  if (exam.status !== "ongoing") {
     throw createApiError(403, "Exam has not started yet", "EXAM_NOT_STARTED");
   }
 

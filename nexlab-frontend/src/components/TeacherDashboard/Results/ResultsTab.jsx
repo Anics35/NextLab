@@ -70,7 +70,8 @@ function ResultsTab({
   setIsTeacherRunning,
   isCodeModalOpen,
   setIsCodeModalOpen,
-  onProctorAlertsOpen
+  onProctorAlertsOpen,
+  onRefreshCourseExams
 }) {
   const [route, setRoute] = useState(getResultRoute);
   const [analytics, setAnalytics] = useState(null);
@@ -322,6 +323,36 @@ function ResultsTab({
     }
   };
 
+  const handleStartExam = async () => {
+    if (!route.examId || !selectedExam) return;
+
+    setIsFinalizingMarks(true);
+    try {
+      await updateExam(route.examId, { status: 'ongoing' });
+      toast.success('Exam started.');
+      await onRefreshCourseExams?.();
+    } catch (error) {
+      toast.error(error.message || 'Unable to start exam.');
+    } finally {
+      setIsFinalizingMarks(false);
+    }
+  };
+
+  const handleStopExam = async () => {
+    if (!route.examId || !selectedExam) return;
+
+    setIsFinalizingMarks(true);
+    try {
+      await updateExam(route.examId, { status: 'ended' });
+      toast.success('Exam stopped.');
+      await onRefreshCourseExams?.();
+    } catch (error) {
+      toast.error(error.message || 'Unable to stop exam.');
+    } finally {
+      setIsFinalizingMarks(false);
+    }
+  };
+
   const handleOverrideScore = async (submissionId, problemId) => {
     const draftKey = `${submissionId}_${problemId}`;
     const fallbackScore =
@@ -439,6 +470,35 @@ function ResultsTab({
               <p className="mt-1 text-sm text-gray-400">{selectedCourse?.title || 'Selected course'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {selectedExam?.status === 'ongoing' ? (
+                <button
+                  type="button"
+                  onClick={handleStopExam}
+                  disabled={isFinalizingMarks || !route.examId}
+                  className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                >
+                  {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
+                  Stop Exam
+                </button>
+              ) : selectedExam?.status === 'published' ? (
+                <button
+                  type="button"
+                  onClick={handleStartExam}
+                  disabled={isFinalizingMarks || !route.examId}
+                  className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
+                  Start Exam
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-white opacity-60"
+                >
+                  Exam Ended
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleToggleResultVisibility(!showMarksImmediately)}

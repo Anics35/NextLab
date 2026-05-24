@@ -100,9 +100,7 @@ function TeacherDashboard() {
   const handleSelectTab = (tab) => {
     setActiveTab(tab);
     if (tab === 'results') {
-      if (window.location.hash !== RESULT_BASE_HASH) {
-        window.location.hash = RESULT_BASE_HASH;
-      }
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${RESULT_BASE_HASH}`);
       return;
     }
 
@@ -181,11 +179,17 @@ function TeacherDashboard() {
   }, []);
 
   useEffect(() => {
-    void loadWorkspace();
+    const timeoutId = window.setTimeout(() => {
+      void loadWorkspace();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadWorkspace]);
 
   useEffect(() => {
-    void loadCourseExams(selectedCourseId);
+    const timeoutId = window.setTimeout(() => {
+      void loadCourseExams(selectedCourseId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selectedCourseId, loadCourseExams]);
 
   // Socket listeners
@@ -381,6 +385,7 @@ function TeacherDashboard() {
           setIsTeacherRunning={setIsTeacherRunning}
           isCodeModalOpen={isCodeModalOpen}
           setIsCodeModalOpen={setIsCodeModalOpen}
+          onRefreshCourseExams={() => loadCourseExams(selectedCourseId)}
         />
       )}
 
