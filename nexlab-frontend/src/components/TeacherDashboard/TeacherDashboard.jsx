@@ -14,10 +14,21 @@ import QuestionBankTab from './QuestionBank/QuestionBankTab';
 import ExamsTab from './ExamsTab';
 import ResultsTab from './Results/ResultsTab';
 
+const RESULT_BASE_HASH = '#/teacher/results';
+
+const isResultHash = () => window.location.hash.startsWith(RESULT_BASE_HASH);
+
+const getResultHashValue = (key) => {
+  const parts = (window.location.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
+  const index = parts.indexOf(key);
+  return index > -1 ? decodeURIComponent(parts[index + 1] || '') : '';
+};
+
 function TeacherDashboard() {
   // Tab Management
   // Tab Management - restore from localStorage
   const [activeTab, setActiveTab] = useState(() => {
+    if (isResultHash()) return 'results';
     const saved = localStorage.getItem('nextlab_teacher_active_tab');
     return saved || 'courses';
   });
@@ -25,7 +36,7 @@ function TeacherDashboard() {
   // Courses
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
-  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState(() => getResultHashValue('course'));
   const [courseForm, setCourseForm] = useState({ title: '', description: '', courseCode: '' });
   const [selectedCourseDetail, setSelectedCourseDetail] = useState(null);
   const [courseDetailLoading, setCourseDetailLoading] = useState(false);
@@ -45,7 +56,7 @@ function TeacherDashboard() {
 
   // Exams
   const [courseExams, setCourseExams] = useState([]);
-  const [selectedExamId, setSelectedExamId] = useState('');
+  const [selectedExamId, setSelectedExamId] = useState(() => getResultHashValue('exam'));
   const [examForm, setExamForm] = useState(DEFAULT_EXAM_FORM);
   const [selectedProblemMap, setSelectedProblemMap] = useState({});
 
@@ -73,6 +84,30 @@ function TeacherDashboard() {
     useEffect(() => {
       localStorage.setItem('nextlab_teacher_active_tab', activeTab);
     }, [activeTab]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (isResultHash()) {
+        setActiveTab('results');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleSelectTab = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'results') {
+      if (!isResultHash()) {
+        window.location.hash = RESULT_BASE_HASH;
+      }
+      return;
+    }
+
+    if (isResultHash()) {
+      window.history.pushState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+  };
   // Centralized logout handler to clear all cached state
   const handleLogout = useCallback(() => {
     logout();
@@ -88,15 +123,15 @@ function TeacherDashboard() {
       const nextCourses = courseData.courses || [];
       setCourses(nextCourses);
       setProblems(problemData || []);
-      const nextCourse = selectedCourseId || nextCourses[0]?._id || '';
-      setSelectedCourseId(nextCourse);
+      const nextCourse = getResultHashValue('course') || nextCourses[0]?._id || '';
+      setSelectedCourseId((prev) => prev || nextCourse);
       setExamForm((prev) => ({ ...prev, courseId: prev.courseId || nextCourse }));
     } catch (error) {
       toast.error(error.message || 'Unable to load workspace.');
     } finally {
       setCoursesLoading(false);
     }
-  }, [selectedCourseId]);
+  }, []);
 
   const loadCourseExams = useCallback(async (courseId) => {
     if (!courseId) {
@@ -104,6 +139,8 @@ function TeacherDashboard() {
       setSelectedExamId('');
       return;
     }
+    setCourseExams([]);
+    setSelectedExamId('');
     try {
       const data = await getCourseExams(courseId);
       const exams = data.exams || [];
@@ -182,7 +219,7 @@ function TeacherDashboard() {
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleSelectTab(tab)}
               className={`text-left rounded-md px-3 py-2 border ${
                 activeTab === tab
                   ? 'bg-[#ffa116] text-black border-[#ffa116]'
@@ -290,7 +327,7 @@ function TeacherDashboard() {
           onPublish={async (payload) => {
             await createExam(payload);
             await loadCourseExams(examForm.courseId);
-            setActiveTab('results');
+            handleSelectTab('results');
           }}
         />
       )}

@@ -1,5 +1,3 @@
-import { LoaderCircle } from 'lucide-react';
-
 function StudentListPanel({
   studentRows,
   selectedSubmissionId,

@@ -265,9 +265,9 @@ function SubmissionReview({
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-hidden flex flex-col gap-4 p-4">
+            <div className="flex-1 overflow-hidden p-4">
               {/* Code Editor */}
-              <div className="flex-1 border border-gray-800 rounded-md overflow-hidden bg-black">
+              <div className="h-full border border-gray-800 rounded-md overflow-hidden bg-black">
                 <Editor
                   height="100%"
                   language={selectedProblem.language || 'javascript'}
@@ -281,27 +281,6 @@ function SubmissionReview({
                     theme: 'vs-dark'
                   }}
                 />
-              </div>
-
-              {/* Teacher Run Output */}
-              <div className="flex-1 flex flex-col border border-gray-800 rounded-md overflow-hidden bg-black">
-                <div className="border-b border-gray-800 p-3 bg-[#111] flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-300">Teacher Run Output</span>
-                  <button
-                    type="button"
-                    onClick={handleTeacherRunCode}
-                    disabled={isTeacherRunning}
-                    className="bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-500 inline-flex items-center gap-2 text-sm disabled:opacity-50"
-                  >
-                    {isTeacherRunning ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
-                    {isTeacherRunning ? 'Running...' : 'Run'}
-                  </button>
-                </div>
-                <div className="flex-1 overflow-auto p-3">
-                  <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
-                    {teacherOutput || 'No output'}
-                  </pre>
-                </div>
               </div>
             </div>
           </div>
