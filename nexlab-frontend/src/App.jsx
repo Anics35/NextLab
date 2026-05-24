@@ -296,7 +296,16 @@ function App() {
     }
   }, []);
 
-  const startSelectedExam = useCallback((examId) => loadExamSession(examId, { reviewMode: false }), [loadExamSession]);
+  const startSelectedExam = useCallback(async (examId) => {
+    if (typeof document !== 'undefined' && document.documentElement?.requestFullscreen && !document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch (error) {
+        console.warn('Unable to enter fullscreen automatically.', error);
+      }
+    }
+    return loadExamSession(examId, { reviewMode: false });
+  }, [loadExamSession]);
   const openExamResults = useCallback((examId) => loadExamSession(examId, { reviewMode: true }), [loadExamSession]);
 
   const returnToDashboard = useCallback(() => {
@@ -367,11 +376,11 @@ function App() {
     returnToDashboard();
   }, [exam, finalizeExamSession, isExamLocked, isExamStarted, returnToDashboard]);
 
-  const submitCurrentProblem = async (editorCode) => {
+  const submitCurrentProblem = async (editorCode, { force = false } = {}) => {
     if (!examId || !currentProblemId || isExamLocked || isSubmitting) return;
     const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
 
-    if (!sourceCode.trim()) {
+    if (!sourceCode.trim() && !force) {
       toast.error('Cannot submit empty code.');
       return;
     }
@@ -484,7 +493,7 @@ function App() {
     if ((perProblemRemaining[currentProblemId] ?? 0) <= 0 && !autoSubmitMapRef.current[currentProblemId]) {
       autoSubmitMapRef.current[currentProblemId] = true;
       toast.error('Problem timer expired. Auto-submitting current problem.');
-      void submitCurrentProblem();
+      void submitCurrentProblem(undefined, { force: true });
     }
   }, [currentProblemId, isExamLocked, isPerProblemTimer, perProblemRemaining, submitCurrentProblem]);
 

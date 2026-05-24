@@ -19,15 +19,15 @@ function CodeEditorPanel({ currentProblemId, language, code, editorRef, latestCo
           if (latestCodeRef) {
             latestCodeRef.current = value || '';
           }
+          if (typeof setCode === 'function') {
+            setCode(value || '');
+          }
           if (syncTimeoutRef) {
             if (syncTimeoutRef.current) {
               window.clearTimeout(syncTimeoutRef.current);
             }
             syncTimeoutRef.current = window.setTimeout(() => {
               syncTimeoutRef.current = null;
-              if (typeof setCode === 'function') {
-                setCode(latestCodeRef.current);
-              }
             }, 300);
           }
         }}

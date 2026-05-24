@@ -150,12 +150,6 @@ function SecureIDE({
     }
 
     const movingForward = targetIndex > currentProblemIndex;
-
-    // Block navigation if per-problem timer is still running
-    if (isPerProblemTimer && perProblemTimeLeft > 0) {
-      toast.error('Complete the current problem before moving to the next.');
-      return;
-    }
     const locked = isSequentialMode && movingForward && !currentProblemSubmitted;
     if (locked) {
       toast.error('Submit current problem to unlock next one.');
@@ -211,31 +205,6 @@ function SecureIDE({
     document.addEventListener('fullscreenchange', onFullScreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullScreenChange);
   }, []);
-
-  useEffect(() => {
-    if (!isExamStarted || document.fullscreenElement) {
-      return;
-    }
-
-    const requestFullscreen = async () => {
-      try {
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          await elem.requestFullscreen();
-        } else if (elem.webkitRequestFullscreen) {
-          await elem.webkitRequestFullscreen();
-        } else if (elem.mozRequestFullScreen) {
-          await elem.mozRequestFullScreen();
-        } else if (elem.msRequestFullscreen) {
-          await elem.msRequestFullscreen();
-        }
-      } catch (error) {
-        console.warn('Unable to enter fullscreen automatically.', error);
-      }
-    };
-
-    void requestFullscreen();
-  }, [isExamStarted]);
 
   const toggleFullscreen = async () => {
     try {
@@ -351,20 +320,19 @@ function SecureIDE({
           currentProblemSubmitted={currentProblemSubmitted}
           currentProblem={currentProblem}
           onNavigate={handleProblemNavigation}
-          isPerProblemTimer={isPerProblemTimer}
-          perProblemTimeLeft={perProblemTimeLeft}
+                 isPerProblemTimer={isPerProblemTimer}
+                 perProblemTimeLeft={perProblemTimeLeft}
         />
 
         <SplitPanelDivider type="left" onMouseDown={startDragging} />
 
         <section
-          className="flex min-w-90 flex-col border-r border-white/10 bg-[#060606]"
+          className="flex min-w-[360px] flex-col border-r border-white/10 bg-[#060606]"
           style={{ width: `${centerWidth}%` }}
           onCopy={handleSecurityInvasion}
           onPaste={handleSecurityInvasion}
           onContextMenu={handleSecurityInvasion}
         >
-
           <EditorToolbar
             language={language}
             setLanguage={setLanguage}
@@ -397,5 +365,23 @@ function SecureIDE({
     </div>
   );
 }
+   
+     // Block navigation if per-problem timer is still running
+     if (isPerProblemTimer && perProblemTimeLeft > 0) {
+       toast.error('Complete the current problem before moving to the next.');
+       return;
+     }
+   
+   // Block navigation if per-problem timer is still running
+   if (isPerProblemTimer && perProblemTimeLeft > 0) {
+     toast.error('Complete the current problem before moving to the next.');
+     return;
+   }
+
+   // Block navigation if per-problem timer is still running
+   if (isPerProblemTimer && perProblemTimeLeft > 0) {
+     toast.error('Complete the current problem before moving to the next.');
+     return;
+   }
 
 export default SecureIDE;

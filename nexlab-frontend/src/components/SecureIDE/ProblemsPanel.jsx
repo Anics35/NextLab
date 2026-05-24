@@ -1,7 +1,7 @@
 import { AlertTriangle, Lock } from 'lucide-react';
 import { getProblemId } from './constants';
 
-function ProblemsPanel({ problems, currentProblemIndex, isSequentialMode, currentProblemSubmitted, currentProblem, onNavigate }) {
+function ProblemsPanel({ problems, currentProblemIndex, isSequentialMode, currentProblemSubmitted, currentProblem, onNavigate, isPerProblemTimer = false, perProblemTimeLeft = 0 }) {
   const isDesignProblem = currentProblem?.problemType === 'design';
 
   return (
@@ -12,6 +12,7 @@ function ProblemsPanel({ problems, currentProblemIndex, isSequentialMode, curren
             const problemId = getProblemId(problem);
             const movingForward = index > currentProblemIndex;
             const locked = isSequentialMode && movingForward && !currentProblemSubmitted;
+            const timerActive = isPerProblemTimer && perProblemTimeLeft > 0 && index !== currentProblemIndex;
             const active = index === currentProblemIndex;
 
             return (
@@ -19,19 +20,24 @@ function ProblemsPanel({ problems, currentProblemIndex, isSequentialMode, curren
                 key={problemId || index}
                 type="button"
                 onClick={() => onNavigate(index)}
-                disabled={locked}
+                disabled={locked || timerActive}
                 className={`rounded-full border px-3 py-1 text-xs transition ${
                   active ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-white/15 bg-white/5 text-white/70'
                 } disabled:opacity-50`}
               >
-                {locked ? <Lock className="mr-1 inline" size={11} /> : null}
+                {locked || timerActive ? <Lock className="mr-1 inline" size={11} /> : null}
                 {index + 1}
               </button>
             );
           })}
         </div>
 
-        {isSequentialMode && !currentProblemSubmitted ? (
+        {isPerProblemTimer && perProblemTimeLeft > 0 ? (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-xs text-red-300">
+            <AlertTriangle size={13} className="mt-0.5" />
+            Complete the current problem before moving to the next.
+          </div>
+        ) : isSequentialMode && !currentProblemSubmitted ? (
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">
             <AlertTriangle size={13} className="mt-0.5" />
             Submit current problem to unlock next one.
