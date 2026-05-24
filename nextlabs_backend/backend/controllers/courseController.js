@@ -21,11 +21,11 @@ async function generateInviteCode() {
 
 async function createCourse(req, res, next) {
   try {
-    const { title, description = "", courseCode } = req.body;
+    const { title, description = "", courseCode, year, semester } = req.body;
     const normalizedCourseCode = normalizeCourseCode(courseCode);
 
-    if (isBlank(title) || isBlank(normalizedCourseCode)) {
-      throw createApiError(400, "title and courseCode are required", "MISSING_FIELDS");
+    if (isBlank(title) || isBlank(normalizedCourseCode) || !year || !semester) {
+      throw createApiError(400, "title, courseCode, year, and semester are required", "MISSING_FIELDS");
     }
 
     if (!/^[A-Z0-9_-]{4,20}$/.test(normalizedCourseCode)) {
@@ -34,6 +34,14 @@ async function createCourse(req, res, next) {
         "courseCode must be 4-20 characters and can contain letters, numbers, underscore or hyphen",
         "INVALID_COURSE_CODE"
       );
+    }
+
+    if (typeof year !== "number" || year < 2000 || year > 2100) {
+      throw createApiError(400, "year must be a number between 2000 and 2100", "INVALID_YEAR");
+    }
+
+    if (typeof semester !== "number" || semester < 1 || semester > 8) {
+      throw createApiError(400, "semester must be a number between 1 and 8", "INVALID_SEMESTER");
     }
 
     const existingCode = await Course.exists({ courseCode: normalizedCourseCode });
@@ -47,6 +55,8 @@ async function createCourse(req, res, next) {
       teacherId: req.user.id,
       courseCode: normalizedCourseCode,
       inviteCode: await generateInviteCode(),
+      year: Number(year),
+      semester: Number(semester),
       students: []
     });
 
@@ -133,7 +143,7 @@ async function getCourse(req, res, next) {
 async function updateCourse(req, res, next) {
   try {
     const { id } = req.params;
-    const { title, description = "", courseCode } = req.body;
+    const { title, description = "", courseCode, year, semester } = req.body;
 
     if (!isValidObjectId(id)) {
       throw createApiError(400, "Course id must be a valid MongoDB ObjectId", "INVALID_COURSE_ID");
@@ -170,6 +180,20 @@ async function updateCourse(req, res, next) {
       }
 
       course.courseCode = normalizedCourseCode;
+    }
+
+    if (year !== undefined) {
+      if (typeof year !== "number" || year < 2000 || year > 2100) {
+        throw createApiError(400, "year must be a number between 2000 and 2100", "INVALID_YEAR");
+      }
+      course.year = Number(year);
+    }
+
+    if (semester !== undefined) {
+      if (typeof semester !== "number" || semester < 1 || semester > 8) {
+        throw createApiError(400, "semester must be a number between 1 and 8", "INVALID_SEMESTER");
+      }
+      course.semester = Number(semester);
     }
 
     await course.save();

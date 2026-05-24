@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { LogOut } from 'lucide-react';
-import { logout } from '../../services/authService';
+import { getAuthToken, logout } from '../../services/authService';
 import { getMyCourses, getCourseExams, getCourseById, createExam } from '../../services/api';
 import { getProblems } from '../../services/codeService';
 import { initSocket, socket } from '../../services/socket';
 import AppLayout from '../layout/AppLayout';
 import ProctorAlerts from '../ProctorAlerts';
-import { TABS, DEFAULT_EXAM_FORM, DEFAULT_PROBLEM_FORM } from './constants';
+import { TABS, DEFAULT_EXAM_FORM, DEFAULT_PROBLEM_FORM, DEFAULT_COURSE_FORM } from './constants';
 import CoursesTab from './CourseManagement/CoursesTab';
 import CourseDetail from './CourseManagement/CourseDetail';
 import QuestionBankTab from './QuestionBank/QuestionBankTab';
@@ -37,11 +37,11 @@ function TeacherDashboard() {
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [selectedCourseId, setSelectedCourseId] = useState(() => getResultHashValue('course'));
-  const [courseForm, setCourseForm] = useState({ title: '', description: '', courseCode: '' });
+  const [courseForm, setCourseForm] = useState(DEFAULT_COURSE_FORM);
   const [selectedCourseDetail, setSelectedCourseDetail] = useState(null);
   const [courseDetailLoading, setCourseDetailLoading] = useState(false);
   const [isEditingCourse, setIsEditingCourse] = useState(false);
-  const [courseEditForm, setCourseEditForm] = useState({ title: '', description: '', courseCode: '' });
+  const [courseEditForm, setCourseEditForm] = useState(DEFAULT_COURSE_FORM);
   const [isSavingCourse, setIsSavingCourse] = useState(false);
 
   // Problems
@@ -89,7 +89,9 @@ function TeacherDashboard() {
     const handleHashChange = () => {
       if (isResultHash()) {
         setActiveTab('results');
+        return;
       }
+      setActiveTab((prev) => (prev === 'results' ? 'courses' : prev));
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -98,7 +100,7 @@ function TeacherDashboard() {
   const handleSelectTab = (tab) => {
     setActiveTab(tab);
     if (tab === 'results') {
-      if (!isResultHash()) {
+      if (window.location.hash !== RESULT_BASE_HASH) {
         window.location.hash = RESULT_BASE_HASH;
       }
       return;
@@ -166,7 +168,9 @@ function TeacherDashboard() {
       setCourseEditForm({
         title: course?.title || '',
         description: course?.description || '',
-        courseCode: course?.courseCode || ''
+        courseCode: course?.courseCode || '',
+        year: course?.year || new Date().getFullYear(),
+        semester: course?.semester || 1
       });
       setIsEditingCourse(false);
     } catch (error) {
@@ -186,7 +190,7 @@ function TeacherDashboard() {
 
   // Socket listeners
   useEffect(() => {
-    initSocket(localStorage.getItem('token'));
+    initSocket(getAuthToken());
     const onProctorAlert = (event) => {
       setProctorAlerts((prev) => [event, ...prev].slice(0, 50));
       toast.error(`Alert: ${event?.studentName || 'Student'} - ${event?.type || 'violation'}`);
@@ -259,7 +263,9 @@ function TeacherDashboard() {
                 const response = await updateCourse(selectedCourseDetail._id, {
                   title: courseEditForm.title.trim(),
                   description: courseEditForm.description,
-                  courseCode: courseEditForm.courseCode
+                  courseCode: courseEditForm.courseCode,
+                  year: courseEditForm.year,
+                  semester: courseEditForm.semester
                 });
                 const updatedCourse = response.course || null;
                 if (updatedCourse) {
@@ -267,7 +273,9 @@ function TeacherDashboard() {
                   setCourseEditForm({
                     title: updatedCourse.title || '',
                     description: updatedCourse.description || '',
-                    courseCode: updatedCourse.courseCode || ''
+                    courseCode: updatedCourse.courseCode || '',
+                    year: updatedCourse.year || new Date().getFullYear(),
+                    semester: updatedCourse.semester || 1
                   });
                   setCourses((prev) =>
                     prev.map((course) => (course._id === updatedCourse._id ? { ...course, ...updatedCourse } : course))

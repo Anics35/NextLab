@@ -12,6 +12,9 @@ function CourseDetail({
   onClose,
   isSaving
 }) {
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
+
   return (
     <section className={`${cardClass} mb-4`}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
@@ -47,6 +50,10 @@ function CourseDetail({
               <h3 className="text-xl font-semibold text-white">{selectedCourseDetail?.title}</h3>
               <p className="text-sm text-gray-400 mt-3">Course code</p>
               <p className="text-[#ffa116] font-semibold">{selectedCourseDetail?.courseCode}</p>
+              <p className="text-sm text-gray-400 mt-3">Year</p>
+              <p className="text-blue-400 font-semibold">{selectedCourseDetail?.year || '-'}</p>
+              <p className="text-sm text-gray-400 mt-3">Semester</p>
+              <p className="text-purple-400 font-semibold">{selectedCourseDetail?.semester ? `Semester ${selectedCourseDetail.semester}` : '-'}</p>
               <p className="text-sm text-gray-400 mt-3">Invite code</p>
               <p className="text-green-400 font-semibold">{selectedCourseDetail?.inviteCode || '-'}</p>
               <p className="text-sm text-gray-400 mt-3">Students enrolled</p>
@@ -68,6 +75,28 @@ function CourseDetail({
                   onChange={(event) => setCourseEditForm((prev) => ({ ...prev, courseCode: event.target.value.toUpperCase() }))}
                   placeholder="Course code"
                 />
+                <select
+                  className={inputClass}
+                  value={courseEditForm.year}
+                  onChange={(event) => setCourseEditForm((prev) => ({ ...prev, year: Number(event.target.value) }))}
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={inputClass}
+                  value={courseEditForm.semester}
+                  onChange={(event) => setCourseEditForm((prev) => ({ ...prev, semester: Number(event.target.value) }))}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                    <option key={sem} value={sem}>
+                      Semester {sem}
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   className={`${inputClass} resize-none`}
                   rows={4}

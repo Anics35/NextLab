@@ -6,7 +6,7 @@ import AuthForm from './components/AuthForm';
 import SecureIDE from './components/SecureIDE/SecureIDE';
 import StudentDashboard from './components/StudentDashboard/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard/TeacherDashboard';
-import { logout } from './services/authService';
+import { clearPersistentAuthForTabClose, getAuthToken, getStoredUser, logout } from './services/authService';
 import { runCode } from './services/codeService';
 import { finalizeExamAttempt, getCourseExams, getExamById, getMyAttempt, saveExamAttempt, startExamAttempt, submitExamAnswer } from './services/api';
 import { emitEvent, initSocket } from './services/socket';
@@ -72,8 +72,7 @@ const getExamDurationSeconds = (exam) => {
 
 function App() {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    return getStoredUser();
   });
 
   const [activeCourse, setActiveCourse] = useState(() => {
@@ -123,7 +122,18 @@ function App() {
 
   useEffect(() => {
     if (!user || user.role !== 'student') return;
-    initSocket(localStorage.getItem('token'));
+    initSocket(getAuthToken());
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const handlePageHide = () => {
+      clearPersistentAuthForTabClose();
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
   }, [user]);
 
   // Persist activeCourse to localStorage
@@ -174,12 +184,12 @@ function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
-    logout();
     // Clear all cached page state
     localStorage.removeItem('nextlab_active_course');
     localStorage.removeItem('nextlab_current_exam');
     localStorage.removeItem('nextlab_problem_index');
     localStorage.removeItem('nextlab_teacher_active_tab');
+    logout();
     setUser(null);
   }, []);
 

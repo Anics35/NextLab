@@ -3,7 +3,9 @@ export const TABS = ['courses', 'question-bank', 'exams', 'results'];
 export const DEFAULT_COURSE_FORM = {
   title: '',
   description: '',
-  courseCode: ''
+  courseCode: '',
+  year: new Date().getFullYear(),
+  semester: 1
 };
 
 export const DEFAULT_EXAM_FORM = {
