@@ -97,6 +97,8 @@ function App() {
   const [isLoadingExam, setIsLoadingExam] = useState(false);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [isExamLocked, setIsExamLocked] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [lastRunCodeMap, setLastRunCodeMap] = useState({});
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [clockNow, setClockNow] = useState(() => Date.now());
 
@@ -202,6 +204,16 @@ function App() {
     }
   }, [exam?._id, isExamStarted]);
 
+  const exitFullscreenIfNeeded = useCallback(async () => {
+    if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch (error) {
+        console.warn('Unable to exit fullscreen.', error);
+      }
+    }
+  }, []);
+
   const resetExamSession = useCallback(() => {
     autoFinalizeRef.current = false;
     autoSubmitMapRef.current = {};
@@ -217,6 +229,8 @@ function App() {
     setIsSubmitting(false);
     setIsExamStarted(false);
     setIsExamLocked(false);
+    setShowExitConfirm(false);
+    setLastRunCodeMap({});
   }, []);
 
   const loadCourseExams = useCallback(async (course) => {
@@ -310,11 +324,13 @@ function App() {
 
   const returnToDashboard = useCallback(() => {
     const selectedCourse = activeCourse;
-    resetExamSession();
-    if (selectedCourse?._id) {
-      void loadCourseExams(selectedCourse);
-    }
-  }, [activeCourse, loadCourseExams, resetExamSession]);
+    void exitFullscreenIfNeeded().finally(() => {
+      resetExamSession();
+      if (selectedCourse?._id) {
+        void loadCourseExams(selectedCourse);
+      }
+    });
+  }, [activeCourse, exitFullscreenIfNeeded, loadCourseExams, resetExamSession]);
 
   const updateCurrentProblemState = useCallback((patch) => {
     if (!currentProblemId) return;
@@ -324,13 +340,19 @@ function App() {
   const handleRunCode = async (editorCode) => {
     if (!currentProblem || isExamLocked || isCurrentProblemLocked) return;
     const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
+    const runningProblemId = getProblemId(currentProblem);
+    const runtimeInput = String(currentProblemState.input ?? '');
+
     console.log('FINAL CODE:', sourceCode);
     console.log('SENT CODE:', sourceCode);
     setIsRunning(true);
     try {
-      emitEvent('run_clicked', { examId: exam?._id, problemId: getProblemId(currentProblem), at: new Date().toISOString() });
-      updateCurrentProblemState({ code: sourceCode });
-      const response = await runCode(currentProblemState.language, sourceCode, currentProblemState.input);
+      emitEvent('run_clicked', { examId: exam?._id, problemId: runningProblemId, at: new Date().toISOString() });
+      updateCurrentProblemState({ code: sourceCode, input: runtimeInput });
+      if (runningProblemId) {
+        setLastRunCodeMap((prev) => ({ ...prev, [runningProblemId]: sourceCode }));
+      }
+      const response = await runCode(currentProblemState.language, sourceCode, runtimeInput);
       console.log('[Student] runCode response', response);
       updateCurrentProblemState({ output: response.output || response.error || 'No output' });
     } catch {
@@ -341,17 +363,54 @@ function App() {
     }
   };
 
-  const finalizeExamSession = async (trigger = 'manual') => {
+  const autoSubmitPendingProblems = useCallback(async () => {
+    if (!examId || !problems.length) return;
+
+    let nextAttempt = null;
+
+    for (const problem of problems) {
+      const problemId = getProblemId(problem);
+      if (!problemId || submissions[problemId]) continue;
+
+      const state = problemStates[problemId] || buildProblemState(problem);
+      const language = state.language || getDefaultLanguage();
+      const codeToSubmit = String(lastRunCodeMap[problemId] ?? state.code ?? getDefaultCode(problem, language));
+
+      try {
+        const response = await submitExamAnswer({
+          examId,
+          problemId,
+          code: codeToSubmit,
+          language,
+          input: state.input || ''
+        });
+        nextAttempt = response?.attempt || nextAttempt;
+      } catch (error) {
+        console.warn('Auto-submit failed for problem', problemId, error);
+      }
+    }
+
+    if (nextAttempt) {
+      setAttempt(nextAttempt);
+      setSubmissions(buildSubmissionMap(nextAttempt, problems));
+    }
+  }, [examId, lastRunCodeMap, problemStates, problems, submissions]);
+
+  const finalizeExamSession = useCallback(async (trigger = 'manual') => {
     if (!examId || autoFinalizeRef.current) return;
     autoFinalizeRef.current = true;
     setIsExamLocked(true);
 
     try {
+      if (trigger === 'timeout') {
+        await autoSubmitPendingProblems();
+      }
+
       const response = await finalizeExamAttempt(examId);
       setAttempt(response.attempt || null);
       toast[trigger === 'timeout' ? 'error' : 'success'](trigger === 'timeout' ? 'Time is over. Exam submitted automatically.' : 'Exam submitted successfully.');
 
-      if (trigger === 'manual') {
+      if (trigger === 'manual' || trigger === 'timeout') {
         returnToDashboard();
       }
     } catch (error) {
@@ -359,7 +418,7 @@ function App() {
       autoFinalizeRef.current = false;
       setIsExamLocked(false);
     }
-  };
+  }, [autoSubmitPendingProblems, examId, returnToDashboard]);
 
   const handleCloseExamView = useCallback(() => {
     if (!exam) return;
@@ -375,6 +434,11 @@ function App() {
 
     returnToDashboard();
   }, [exam, finalizeExamSession, isExamLocked, isExamStarted, returnToDashboard]);
+
+  const handleExitFromResults = useCallback(() => {
+    setShowExitConfirm(false);
+    returnToDashboard();
+  }, [returnToDashboard]);
 
   const submitCurrentProblem = async (editorCode, { force = false } = {}) => {
     if (!examId || !currentProblemId || isExamLocked || isSubmitting) return;
@@ -457,7 +521,7 @@ function App() {
       const serverNow = Date.now() + serverTimeOffset;
       const secondsLeft = Math.max(0, Math.floor((endTimeMs - serverNow) / 1000));
       setRemainingTime(secondsLeft);
-      if (secondsLeft === 0 && !isExamLocked) {
+      if (secondsLeft === 13 && !isExamLocked) {
         setIsExamLocked(true);
         void finalizeExamSession('timeout');
       }
@@ -497,6 +561,17 @@ function App() {
     }
   }, [currentProblemId, isExamLocked, isPerProblemTimer, perProblemRemaining, submitCurrentProblem]);
 
+  // Auto-finalize exam when all problems are submitted
+  useEffect(() => {
+    if (!exam?._id || isExamLocked || !problems.length || !isExamStarted) return;
+
+    const allSubmitted = problems.every((problem) => submissions[getProblemId(problem)]);
+    if (allSubmitted && !autoFinalizeRef.current) {
+      toast.success('All problems submitted. Finalizing exam...');
+      void finalizeExamSession('auto-submit');
+    }
+  }, [exam?._id, isExamLocked, problems, submissions, isExamStarted, finalizeExamSession]);
+
   const visibleCourseExams = useMemo(() => {
     const serverNow = clockNow + serverTimeOffset;
     return courseExams.filter((item) => item.status !== 'draft').map((item) => {
@@ -519,64 +594,90 @@ function App() {
       <Toaster position="top-right" />
 
       {exam && currentProblem ? (
-        <div className="h-screen flex flex-col">
+        <div className="relative h-screen flex flex-col">
           <div className="h-12 border-b border-white/10 bg-[#0b0b0b] px-4 flex items-center justify-between">
             <div className="text-sm text-white/80">{exam.title}</div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={handleCloseExamView} className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/15">Close</button>
+              {showResultPanel ? (
+                <button type="button" onClick={() => setShowExitConfirm(true)} className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/15">Exit</button>
+              ) : (
+                <button type="button" onClick={handleCloseExamView} className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/15">Close</button>
+              )}
               <button type="button" onClick={handleLogout} className="inline-flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"><LogOut size={14} />Logout</button>
             </div>
           </div>
 
           {showResultPanel ? (
-            <div className="border-b border-white/10 bg-[#0a0a0a] p-4">
+            <div className="flex-1 overflow-y-auto bg-[#0a0a0a] p-4">
               {canShowResults ? (
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Total Score: <span className="font-semibold">{attempt?.totalScore ?? 0}</span></div>
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Problems Evaluated: <span className="font-semibold">{attempt?.answers?.length || 0}</span></div>
-                  {(attempt?.answers || []).map((answer, idx) => (
-                    <div key={`${answer.problemId}-${idx}`} className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
-                      Problem {idx + 1}: {(answer.finalScore ?? answer.score ?? 0)} / {(answer.marks ?? 0)}
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Total Score: <span className="font-semibold">{attempt?.totalScore ?? 0}</span></div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Problems Evaluated: <span className="font-semibold">{attempt?.answers?.length || 0}</span></div>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {problems.map((problem, idx) => {
+                      const problemId = getProblemId(problem);
+                      const answer = (attempt?.answers || []).find((item) => String(item.problemId) === String(problemId));
+                      return (
+                        <div key={problemId || idx} className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
+                          <div className="font-medium text-white">Problem {idx + 1}</div>
+                          <div className="mt-1 text-white/70">Marks: <span className="font-semibold text-white">{answer ? (answer.finalScore ?? answer.score ?? 0) : 0} / {answer?.marks ?? problem?.marks ?? 0}</span></div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">Results are hidden until your teacher finalizes and publishes marks.</div>
               )}
             </div>
-          ) : null}
+          ) : (
+            <div className="flex-1 min-h-0">
+              <SecureIDE
+                exam={exam}
+                examId={exam._id}
+                currentProblem={currentProblem}
+                problems={problems}
+                currentProblemIndex={currentProblemIndex}
+                submissions={submissions}
+                remainingTime={remainingTime}
+                perProblemTimeLeft={currentPerProblemTimeLeft}
+                isPerProblemTimer={isPerProblemTimer}
+                submitExam={() => finalizeExamSession('manual')}
+                submitCurrentProblem={submitCurrentProblem}
+                setCurrentProblemIndex={setCurrentProblemIndex}
+                navigationControl={exam.navigationControl}
+                code={currentProblemState.code}
+                setCode={(nextCode) => updateCurrentProblemState({ code: nextCode })}
+                language={currentProblemState.language}
+                setLanguage={(nextLanguage) => updateCurrentProblemState({ language: nextLanguage, code: getDefaultCode(currentProblem, nextLanguage) })}
+                output={currentProblemState.output}
+                input={currentProblemState.input}
+                setInput={(nextInput) => updateCurrentProblemState({ input: nextInput })}
+                result={currentProblemState.result}
+                isRunning={isRunning}
+                isSubmitting={isSubmitting}
+                onRunCode={handleRunCode}
+                isExamStarted={isExamStarted}
+                isLocked={isExamLocked || isCurrentProblemLocked}
+                languageOptions={LANGUAGE_CONFIG}
+              />
+            </div>
+          )}
 
-          <div className="flex-1 min-h-0">
-            <SecureIDE
-              exam={exam}
-              examId={exam._id}
-              currentProblem={currentProblem}
-              problems={problems}
-              currentProblemIndex={currentProblemIndex}
-              submissions={submissions}
-              remainingTime={remainingTime}
-              perProblemTimeLeft={currentPerProblemTimeLeft}
-              isPerProblemTimer={isPerProblemTimer}
-              submitExam={() => finalizeExamSession('manual')}
-              submitCurrentProblem={submitCurrentProblem}
-              setCurrentProblemIndex={setCurrentProblemIndex}
-              navigationControl={exam.navigationControl}
-              code={currentProblemState.code}
-              setCode={(nextCode) => updateCurrentProblemState({ code: nextCode })}
-              language={currentProblemState.language}
-              setLanguage={(nextLanguage) => updateCurrentProblemState({ language: nextLanguage, code: getDefaultCode(currentProblem, nextLanguage) })}
-              output={currentProblemState.output}
-              input={currentProblemState.input}
-              setInput={(nextInput) => updateCurrentProblemState({ input: nextInput })}
-              result={currentProblemState.result}
-              isRunning={isRunning}
-              isSubmitting={isSubmitting}
-              onRunCode={handleRunCode}
-              isExamStarted={isExamStarted}
-              isLocked={isExamLocked || isCurrentProblemLocked}
-              languageOptions={LANGUAGE_CONFIG}
-            />
-          </div>
+          {showExitConfirm ? (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-sm rounded-lg border border-white/15 bg-[#101010] p-4">
+                <h3 className="text-sm font-semibold text-white">Do you want to exit?</h3>
+                <p className="mt-1 text-xs text-white/60">You will return to the main dashboard.</p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowExitConfirm(false)} className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">No</button>
+                  <button type="button" onClick={handleExitFromResults} className="rounded-md border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30">Yes</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-3 p-3">

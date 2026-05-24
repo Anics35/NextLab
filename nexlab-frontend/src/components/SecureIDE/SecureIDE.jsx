@@ -86,7 +86,7 @@ function SecureIDE({
   const handleSecurityInvasion = useCallback(
     (event) => {
       event.preventDefault();
-      if (!isExamStarted) {
+      if (!isExamStarted || isLocked) {
         return;
       }
 
@@ -94,27 +94,27 @@ function SecureIDE({
       socket?.emit('proctor_event', { type: event.type, timestamp: new Date(), examId });
       socket?.emit('copy_paste', { type: event.type, timestamp: new Date(), examId });
     },
-    [examId, isExamStarted]
+    [examId, isExamStarted, isLocked]
   );
 
   useEffect(() => {
     const handleBlur = () => {
-      if (!isExamStarted) return;
+      if (!isExamStarted || isLocked) return;
       socket?.emit('proctor_event', { type: 'blur', timestamp: new Date(), examId });
     };
     window.addEventListener('blur', handleBlur);
     return () => window.removeEventListener('blur', handleBlur);
-  }, [examId, isExamStarted]);
+  }, [examId, isExamStarted, isLocked]);
 
   useEffect(() => {
     const fn = () => {
-      if (document.hidden && isExamStarted) {
+      if (document.hidden && isExamStarted && !isLocked) {
         socket?.emit('proctor_event', { type: 'tab_switch', examId });
       }
     };
     document.addEventListener('visibilitychange', fn);
     return () => document.removeEventListener('visibilitychange', fn);
-  }, [examId, isExamStarted]);
+  }, [examId, isExamStarted, isLocked]);
 
   // Code storage
   useEffect(() => {
@@ -150,6 +150,12 @@ function SecureIDE({
     }
 
     const movingForward = targetIndex > currentProblemIndex;
+
+    // Allow free navigation in view-only mode (when exam is locked)
+    if (isLocked) {
+      setCurrentProblemIndex(targetIndex);
+      return;
+    }
 
     // Block navigation if per-problem timer is still running
     if (isPerProblemTimer && perProblemTimeLeft > 0) {
@@ -316,14 +322,6 @@ function SecureIDE({
             isPerProblemTimer={isPerProblemTimer}
             problemTimerExpired={problemTimerExpired}
           />
-          <button
-            type="button"
-            onClick={submitExam}
-            disabled={isLocked}
-            className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
-          >
-            Finish Exam
-          </button>
           <button 
             type="button" 
             onClick={toggleFullscreen} 
