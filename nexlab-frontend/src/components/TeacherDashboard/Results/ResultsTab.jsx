@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle } from 'lucide-react';
-import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore } from '../../../services/api';
+import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics } from '../../../services/api';
 import { cardClass } from '../constants';
+import LiveStudentListPanel from './LiveStudentListPanel';
 import StudentListPanel from './StudentListPanel';
 import SubmissionReview from './SubmissionReview';
 
@@ -72,6 +73,8 @@ function ResultsTab({
   onProctorAlertsOpen
 }) {
   const [route, setRoute] = useState(getResultRoute);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   useEffect(() => {
     if (!window.location.hash.startsWith(RESULT_BASE_HASH)) {
@@ -93,6 +96,28 @@ function ResultsTab({
     }
   }, [route.courseId, route.examId, selectedCourseId, selectedExamId, setSelectedCourseId, setSelectedExamId]);
 
+  const selectedCourse = useMemo(
+    () => courses.find((item) => item._id === (route.courseId || selectedCourseId)) || null,
+    [courses, route.courseId, selectedCourseId]
+  );
+
+  const selectedExam = useMemo(
+    () => courseExams.find((item) => item._id === (route.examId || selectedExamId)) || null,
+    [courseExams, route.examId, selectedExamId]
+  );
+
+  const isExamLiveWindow = useMemo(() => {
+    if (!selectedExam?.startTime || !selectedExam?.endTime) {
+      return false;
+    }
+
+    const startTime = new Date(selectedExam.startTime).getTime();
+    const endTime = new Date(selectedExam.endTime).getTime();
+    const now = Date.now();
+
+    return Number.isFinite(startTime) && Number.isFinite(endTime) && now >= startTime && now <= endTime;
+  }, [selectedExam]);
+
   const loadSubmissions = useCallback(
     async (examId) => {
       if (!examId) {
@@ -112,20 +137,45 @@ function ResultsTab({
     [setSubmissions, setSubmissionsLoading]
   );
 
+  const loadAnalytics = useCallback(
+    async (examId) => {
+      if (!examId) {
+        setAnalytics(null);
+        return;
+      }
+
+      setAnalyticsLoading(true);
+      try {
+        const data = await getExamAnalytics(examId);
+        setAnalytics(data.analytics || null);
+      } catch (error) {
+        toast.error(error.message || 'Unable to load live students.');
+        setAnalytics(null);
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     if (route.page !== 'students') return;
     void loadSubmissions(route.examId);
   }, [route.page, route.examId, loadSubmissions]);
 
-  const selectedCourse = useMemo(
-    () => courses.find((item) => item._id === (route.courseId || selectedCourseId)) || null,
-    [courses, route.courseId, selectedCourseId]
-  );
+  useEffect(() => {
+    if (route.page !== 'students' || !route.examId || !isExamLiveWindow) {
+      setAnalytics(null);
+      return undefined;
+    }
 
-  const selectedExam = useMemo(
-    () => courseExams.find((item) => item._id === (route.examId || selectedExamId)) || null,
-    [courseExams, route.examId, selectedExamId]
-  );
+    void loadAnalytics(route.examId);
+    const intervalId = window.setInterval(() => {
+      void loadAnalytics(route.examId);
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isExamLiveWindow, route.page, route.examId, loadAnalytics]);
 
   useEffect(() => {
     if (!selectedExam) return;
@@ -153,6 +203,23 @@ function ResultsTab({
         .sort((a, b) => b.totalScore - a.totalScore),
     [submissions, route.examId, selectedExamId]
   );
+
+  const liveStudents = useMemo(() => {
+    const students = analytics?.students || [];
+    const problemTitles = new Map(
+      (selectedExam?.problems || []).map((problem, index) => [String(problem.problemId?._id || problem.problemId), problem.problemId?.title || `Problem ${index + 1}`])
+    );
+
+    return students
+      .filter((student) => student.status === 'ongoing')
+      .map((student) => ({
+        _id: student.student?._id || student.student?.id || `${student.student?.name || 'student'}-${student.currentProblemIndex}`,
+        name: student.student?.name || 'Student',
+        rollNumber: student.student?.rollNumber || '-',
+        semester: student.student?.semester || '-',
+        currentProblemLabel: problemTitles.get(String(selectedExam?.problems?.[Math.max(0, Number(student.currentProblemIndex || 0))]?.problemId?._id || selectedExam?.problems?.[Math.max(0, Number(student.currentProblemIndex || 0))]?.problemId)) || `Problem ${Number(student.currentProblemIndex || 0) + 1}`
+      }));
+  }, [analytics?.students, selectedExam]);
 
   const selectedStudent = useMemo(
     () => studentRows.find((item) => item._id === selectedSubmissionId) || null,
@@ -395,7 +462,7 @@ function ResultsTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(260px,0.7fr)_minmax(260px,0.7fr)_minmax(0,1.2fr)]">
             <StudentListPanel
               studentRows={studentRows}
               selectedSubmissionId={selectedSubmissionId}
@@ -407,6 +474,8 @@ function ResultsTab({
                 onProctorAlertsOpen?.(student);
               }}
             />
+
+            <LiveStudentListPanel liveStudents={liveStudents} loading={analyticsLoading} isExamLiveWindow={isExamLiveWindow} />
 
             <SubmissionReview
               selectedStudent={selectedStudent}

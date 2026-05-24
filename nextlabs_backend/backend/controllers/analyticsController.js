@@ -80,6 +80,7 @@ async function getExamAnalytics(req, res, next) {
         students: filteredAttempts.map((attempt) => ({
           student: attempt.studentId,
           status: attempt.status,
+          currentProblemIndex: attempt.currentProblemIndex,
           score: attempt.totalScore || 0,
           violations: attempt.violations.length,
           tabSwitchCount: attempt.tabSwitchCount
