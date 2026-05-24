@@ -57,6 +57,9 @@ export const updateExam = (examId, payload) =>
 export const createExam = (payload) =>
   request(api.post('/exam/create', payload), 'Unable to publish exam.');
 
+export const deleteExam = (examId) =>
+  request(api.delete(`/exam/${examId}`), 'Unable to delete exam.');
+
 export const createProblem = (payload) =>
   request(api.post('/problems', payload), 'Unable to create problem.');
 

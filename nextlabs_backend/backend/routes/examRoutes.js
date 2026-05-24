@@ -9,5 +9,6 @@ router.get("/course/:courseId", authenticate, listCourseExams);
 router.get("/:id", authenticate, getExam);
 router.patch("/:id", authenticate, requireRole("teacher"), updateExam);
 router.put("/:id", authenticate, requireRole("teacher"), updateExam);
+router.delete("/:id", authenticate, requireRole("teacher"), require("../controllers/examController").deleteExam);
 
 module.exports = router;

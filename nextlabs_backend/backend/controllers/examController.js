@@ -1,6 +1,8 @@
 const Course = require("../models/Course");
 const Exam = require("../models/Exam");
 const Problem = require("../models/Problem");
+const ExamAttempt = require("../models/ExamAttempt");
+const Submission = require("../models/Submission");
 const { createApiError } = require("../utils/apiError");
 const { isBlank, isValidObjectId } = require("../utils/validators");
 
@@ -269,4 +271,31 @@ async function updateExam(req, res, next) {
   }
 }
 
-module.exports = { createExam, getExam, listCourseExams, updateExam };
+async function deleteExam(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      throw createApiError(400, "Exam id must be a valid MongoDB ObjectId", "INVALID_EXAM_ID");
+    }
+
+    const exam = await Exam.findById(id);
+    if (!exam) {
+      throw createApiError(404, "Exam not found", "EXAM_NOT_FOUND");
+    }
+
+    await assertTeacherOwnsCourse(exam.courseId, req.user.id);
+
+    // Delete related attempts and submissions
+    await ExamAttempt.deleteMany({ examId: exam._id });
+    await Submission.deleteMany({ examId: exam._id });
+
+    await Exam.findByIdAndDelete(exam._id);
+
+    res.json({ success: true, message: 'Exam deleted' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createExam, getExam, listCourseExams, updateExam, deleteExam };

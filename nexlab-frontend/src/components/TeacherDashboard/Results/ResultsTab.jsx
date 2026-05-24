@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle } from 'lucide-react';
-import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics } from '../../../services/api';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, X } from 'lucide-react';
+import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics, deleteExam } from '../../../services/api';
 import { cardClass } from '../constants';
 import LiveStudentListPanel from './LiveStudentListPanel';
 import StudentListPanel from './StudentListPanel';
@@ -76,6 +76,8 @@ function ResultsTab({
   const [route, setRoute] = useState(getResultRoute);
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteExam, setPendingDeleteExam] = useState(null);
 
   useEffect(() => {
     if (!window.location.hash.startsWith(RESULT_BASE_HASH)) {
@@ -443,16 +445,29 @@ function ResultsTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {courseExams.map((exam) => (
-                <button
-                  key={exam._id}
-                  type="button"
-                  onClick={() => openExam(exam._id)}
-                  className="rounded-lg border border-gray-800 bg-[#0a0a0a] p-4 text-left transition-colors hover:border-[#ffa116] hover:bg-[#141414]"
-                >
-                  <p className="font-medium text-white">{exam.title}</p>
-                  <p className="mt-2 text-xs text-gray-400">{exam.problems?.length || 0} problems</p>
-                  <p className="mt-1 text-xs text-gray-400">Duration: {exam.totalDuration || exam.duration || 0} min</p>
-                </button>
+                <div key={exam._id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => openExam(exam._id)}
+                    className="w-full text-left rounded-lg border border-gray-800 bg-[#0a0a0a] p-4 transition-colors hover:border-[#ffa116] hover:bg-[#141414]"
+                  >
+                    <p className="font-medium text-white">{exam.title}</p>
+                    <p className="mt-2 text-xs text-gray-400">{exam.problems?.length || 0} problems</p>
+                    <p className="mt-1 text-xs text-gray-400">Duration: {exam.totalDuration || exam.duration || 0} min</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDeleteExam(exam);
+                      setShowDeleteConfirm(true);
+                    }}
+                    aria-label="Delete exam"
+                    className="absolute top-2 right-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-red-600 text-gray-400 hover:text-white p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -575,6 +590,29 @@ function ResultsTab({
           </div>
         </>
       ) : null}
+
+          {showDeleteConfirm && pendingDeleteExam ? (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-sm rounded-lg border border-white/15 bg-[#101010] p-4">
+                <h3 className="text-sm font-semibold text-white">Delete exam</h3>
+                <p className="mt-1 text-xs text-white/60">Do you really want to delete "{pendingDeleteExam.title}"? This will remove all attempts and submissions.</p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => { setShowDeleteConfirm(false); setPendingDeleteExam(null); }} className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">No</button>
+                  <button type="button" onClick={async () => {
+                    try {
+                      await deleteExam(pendingDeleteExam._id);
+                      toast.success('Exam deleted.');
+                      setShowDeleteConfirm(false);
+                      setPendingDeleteExam(null);
+                      onRefreshCourseExams?.();
+                    } catch (err) {
+                      toast.error(err.message || 'Unable to delete exam.');
+                    }
+                  }} className="rounded-md border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30">Yes</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
     </section>
   );
 }
