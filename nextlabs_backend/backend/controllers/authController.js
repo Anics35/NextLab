@@ -14,7 +14,8 @@ function toAuthResponse(user, token) {
       email: user.email,
       role: user.role,
       rollNumber: user.rollNumber,
-      semester: user.semester
+      semester: user.semester,
+      phone: user.phone
     }
   };
 }
@@ -87,4 +88,54 @@ function me(req, res) {
   });
 }
 
-module.exports = { login, me, register };
+async function updateProfile(req, res, next) {
+  try {
+    const { name, phone, rollNumber, semester } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      throw createApiError(401, "Unauthorized", "UNAUTHORIZED");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw createApiError(404, "User not found", "USER_NOT_FOUND");
+    }
+
+    // Update allowed fields
+    if (name && name.trim()) {
+      user.name = name.trim();
+    }
+    if (typeof phone === 'string') {
+      user.phone = phone.trim();
+    }
+    if (user.role === 'student') {
+      if (rollNumber && String(rollNumber).trim()) {
+        user.rollNumber = String(rollNumber).trim();
+      }
+      if (semester && String(semester).trim()) {
+        user.semester = String(semester).trim();
+      }
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: String(user._id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        rollNumber: user.rollNumber,
+        semester: user.semester,
+        phone: user.phone
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { login, me, register, updateProfile };

@@ -6,6 +6,7 @@ import AuthForm from './components/AuthForm';
 import SecureIDE from './components/SecureIDE/SecureIDE';
 import StudentDashboard from './components/StudentDashboard/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard/TeacherDashboard';
+import Topbar from './components/layout/Topbar';
 import { clearPersistentAuthForTabClose, getAuthToken, getStoredUser, logout } from './services/authService';
 import { runCode } from './services/codeService';
 import { finalizeExamAttempt, getCourseExams, getExamById, getMyAttempt, saveExamAttempt, startExamAttempt, submitExamAnswer } from './services/api';
@@ -603,8 +604,9 @@ function App() {
   const showResultPanel = Boolean(isExamLocked && attempt);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100 outline-none" onKeyDown={handleKeyDown} tabIndex="0">
+    <div className="min-h-screen bg-[#050505] text-gray-100 outline-none flex flex-col" onKeyDown={handleKeyDown} tabIndex="0">
       <Toaster position="top-right" />
+      {!exam && currentProblem === null && <Topbar user={user} onLogout={handleLogout} />}
 
       {exam && currentProblem ? (
         <div className="relative h-screen flex flex-col">
@@ -693,12 +695,9 @@ function App() {
           ) : null}
         </div>
       ) : (
-        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-3 p-3">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-3 p-3 overflow-y-auto">
           <div className="rounded-xl border border-white/10 bg-[#101010] p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-white/90"><ShieldCheck size={16} className="text-emerald-400" />Secure Student Mode</div>
-              <button type="button" onClick={handleLogout} className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"><LogOut size={14} />Logout</button>
-            </div>
+            <div className="mb-4 flex items-center gap-2 text-sm text-white/90"><ShieldCheck size={16} className="text-emerald-400" />Secure Student Mode</div>
             <StudentDashboard activeCourseId={activeCourse?._id} onSelectCourse={loadCourseExams} />
           </div>
 

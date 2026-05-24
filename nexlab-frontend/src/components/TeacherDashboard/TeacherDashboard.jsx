@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { LogOut } from 'lucide-react';
-import { getAuthToken, logout } from '../../services/authService';
+import { getAuthToken, getStoredUser, logout } from '../../services/authService';
 import { getMyCourses, getCourseExams, getCourseById, createExam } from '../../services/api';
 import { getProblems } from '../../services/codeService';
 import { initSocket, socket } from '../../services/socket';
@@ -25,6 +24,9 @@ const getResultHashValue = (key) => {
 };
 
 function TeacherDashboard() {
+  // User
+  const [user, setUser] = useState(null);
+
   // Tab Management
   // Tab Management - restore from localStorage
   const [activeTab, setActiveTab] = useState(() => {
@@ -78,6 +80,14 @@ function TeacherDashboard() {
   const [isTeacherRunning, setIsTeacherRunning] = useState(false);
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [activeProblemIndex, setActiveProblemIndex] = useState(0);
+
+  // Load user info on mount
+  useEffect(() => {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+  }, []);
 
   // Load workspace
     // Persist active tab to localStorage
@@ -239,18 +249,11 @@ function TeacherDashboard() {
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 inline-flex items-center justify-center gap-2"
-      >
-        <LogOut size={14} /> Logout
-      </button>
     </>
   );
 
   return (
-    <AppLayout sidebar={sidebar}>
+    <AppLayout sidebar={sidebar} user={user} onLogout={handleLogout}>
       {activeTab === 'courses' &&
         (selectedCourseDetail ? (
           <CourseDetail

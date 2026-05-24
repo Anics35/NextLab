@@ -129,4 +129,10 @@ export const getActivityByStudent = (studentId, filters = {}) =>
     'Unable to load student activity.'
   );
 
+export const updateProfile = (payload) =>
+  request(
+    api.put('/auth/profile', payload),
+    'Unable to update profile.'
+  );
+
 export default api;

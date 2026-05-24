@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema(
       index: true
     },
     rollNumber: { type: String, trim: true, index: true, sparse: true },
-    semester: { type: String, trim: true, sparse: true }
+    semester: { type: String, trim: true, sparse: true },
+    phone: { type: String, trim: true, sparse: true }
   },
   { timestamps: true }
 );
