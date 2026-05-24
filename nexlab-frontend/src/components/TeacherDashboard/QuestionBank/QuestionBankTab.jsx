@@ -44,9 +44,15 @@ function QuestionBankTab({
         title: problemForm.title.trim(),
         description: problemForm.description.trim(),
         difficulty: problemForm.difficulty,
-        publicTestCases: problemForm.publicTestCases.filter((item) => String(item.output || '').trim()),
-        hiddenTestCases: problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim())
+        problemType: problemForm.problemType || 'testcase'
       };
+
+      // Only include test cases for testcase problems
+      if (problemForm.problemType === 'testcase') {
+        payload.publicTestCases = problemForm.publicTestCases.filter((item) => String(item.output || '').trim());
+        payload.hiddenTestCases = problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim());
+      }
+
       await createProblem(payload);
       setProblemForm(DEFAULT_PROBLEM_FORM);
       toast.success('Problem created.');
@@ -74,9 +80,15 @@ function QuestionBankTab({
         title: problemForm.title.trim(),
         description: problemForm.description.trim(),
         difficulty: problemForm.difficulty,
-        publicTestCases: problemForm.publicTestCases.filter((item) => String(item.output || '').trim()),
-        hiddenTestCases: problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim())
+        problemType: problemForm.problemType || 'testcase'
       };
+
+      // Only include test cases for testcase problems
+      if (problemForm.problemType === 'testcase') {
+        payload.publicTestCases = problemForm.publicTestCases.filter((item) => String(item.output || '').trim());
+        payload.hiddenTestCases = problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim());
+      }
+
       await updateProblem(editingProblemId, payload);
       toast.success('Problem updated.');
       resetProblemForm();
@@ -113,6 +125,7 @@ function QuestionBankTab({
       title: problem.title || '',
       description: problem.description || '',
       difficulty: problem.difficulty || 'easy',
+      problemType: problem.problemType || 'testcase',
       publicTestCases: (problem.publicTestCases || []).length
         ? problem.publicTestCases.map((item) => ({ input: item.input || '', output: item.output || '' }))
         : [{ input: '', output: '' }],

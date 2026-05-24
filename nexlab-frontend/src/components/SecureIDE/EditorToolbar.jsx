@@ -1,6 +1,8 @@
 import { Lock, LoaderCircle, Play, Send } from 'lucide-react';
 
-function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRunCode, isSubmitting, onSubmit, currentProblemSubmitted, effectiveLocked }) {
+function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRunCode, isSubmitting, onSubmit, currentProblemSubmitted, effectiveLocked, currentProblem }) {
+  const isDesignProblem = currentProblem?.problemType === 'design';
+
   return (
     <div className="flex h-12 items-center justify-between border-b border-white/10 bg-[#0b0b0b] px-4">
       <select
@@ -17,15 +19,17 @@ function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRu
       </select>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onRunCode?.()}
-          disabled={isRunning || effectiveLocked || isSubmitting}
-          className="inline-flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 disabled:opacity-50"
-        >
-          {isRunning ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} className="fill-current" />}
-          {isRunning ? 'Running...' : 'Run'}
-        </button>
+        {!isDesignProblem && (
+          <button
+            type="button"
+            onClick={() => onRunCode?.()}
+            disabled={isRunning || effectiveLocked || isSubmitting}
+            className="inline-flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 disabled:opacity-50"
+          >
+            {isRunning ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} className="fill-current" />}
+            {isRunning ? 'Running...' : 'Run'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSubmit?.()}
@@ -33,7 +37,7 @@ function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRu
           className="inline-flex items-center gap-2 rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
         >
           {isSubmitting ? <LoaderCircle size={13} className="animate-spin" /> : <Send size={13} />}
-          {currentProblemSubmitted ? 'Submitted' : isSubmitting ? 'Submitting...' : 'Submit'}
+          {currentProblemSubmitted ? 'Submitted' : isSubmitting ? 'Submitting...' : isDesignProblem ? 'Submit Code' : 'Submit'}
         </button>
       </div>
     </div>

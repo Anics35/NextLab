@@ -54,6 +54,7 @@ async function createProblem(req, res, next) {
       title,
       description,
       difficulty = "easy",
+      problemType = "testcase",
       publicTestCases = [],
       hiddenTestCases = [],
       testCases = []
@@ -62,6 +63,10 @@ async function createProblem(req, res, next) {
 
     if (isBlank(title) || isBlank(description)) {
       throw createApiError(400, "title and description are required", "MISSING_FIELDS");
+    }
+
+    if (!["testcase", "design"].includes(problemType)) {
+      throw createApiError(400, "problemType must be 'testcase' or 'design'", "INVALID_PROBLEM_TYPE");
     }
 
     const legacyPublicCases = Array.isArray(testCases)
@@ -77,8 +82,9 @@ async function createProblem(req, res, next) {
       ? hiddenTestCases
       : legacyHiddenCases;
 
-    if (effectivePublicCases.length + effectiveHiddenCases.length === 0) {
-      throw createApiError(400, "At least one test case is required", "MISSING_FIELDS");
+    // Test cases are required only for testcase type problems
+    if (problemType === "testcase" && effectivePublicCases.length + effectiveHiddenCases.length === 0) {
+      throw createApiError(400, "At least one test case is required for testcase problems", "MISSING_FIELDS");
     }
 
     const getExpectedOutput = (testCase) => toStringValue(testCase.output || testCase.expectedOutput, "");
@@ -105,6 +111,7 @@ async function createProblem(req, res, next) {
       title: title.trim(),
       description: description.trim(),
       difficulty,
+      problemType,
       createdBy: req.user.id,
       publicTestCases: effectivePublicCases.map((testCase) => ({
         input: toStringValue(testCase.input),
@@ -158,6 +165,7 @@ async function updateProblem(req, res, next) {
       title,
       description,
       difficulty = existingProblem.difficulty,
+      problemType = existingProblem.problemType || "testcase",
       publicTestCases = existingProblem.publicTestCases,
       hiddenTestCases = existingProblem.hiddenTestCases,
       testCases = []
@@ -165,6 +173,10 @@ async function updateProblem(req, res, next) {
 
     if (isBlank(title) || isBlank(description)) {
       throw createApiError(400, "title and description are required", "MISSING_FIELDS");
+    }
+
+    if (!["testcase", "design"].includes(problemType)) {
+      throw createApiError(400, "problemType must be 'testcase' or 'design'", "INVALID_PROBLEM_TYPE");
     }
 
     const legacyPublicCases = Array.isArray(testCases)
@@ -180,8 +192,9 @@ async function updateProblem(req, res, next) {
       ? hiddenTestCases
       : legacyHiddenCases;
 
-    if (effectivePublicCases.length + effectiveHiddenCases.length === 0) {
-      throw createApiError(400, "At least one test case is required", "MISSING_FIELDS");
+    // Test cases are required only for testcase type problems
+    if (problemType === "testcase" && effectivePublicCases.length + effectiveHiddenCases.length === 0) {
+      throw createApiError(400, "At least one test case is required for testcase problems", "MISSING_FIELDS");
     }
 
     const getExpectedOutput = (testCase) => toStringValue(testCase.output || testCase.expectedOutput, "");
@@ -208,6 +221,7 @@ async function updateProblem(req, res, next) {
     existingProblem.title = title.trim();
     existingProblem.description = description.trim();
     existingProblem.difficulty = difficulty;
+    existingProblem.problemType = problemType;
     existingProblem.publicTestCases = effectivePublicCases.map((testCase) => ({
       input: toStringValue(testCase.input),
       output: getExpectedOutput(testCase).trim()

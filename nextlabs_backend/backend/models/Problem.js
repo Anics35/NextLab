@@ -26,6 +26,11 @@ const problemSchema = new mongoose.Schema(
       enum: ["easy", "medium", "hard"],
       default: "easy"
     },
+    problemType: {
+      type: String,
+      enum: ["testcase", "design"],
+      default: "testcase"
+    },
     publicTestCases: { type: [testCaseSchema], default: [] },
     hiddenTestCases: { type: [testCaseSchema], default: [] },
     testCases: { type: [legacyTestCaseSchema], default: [] },

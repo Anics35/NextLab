@@ -12,6 +12,88 @@ async function evaluateExamAnswer({ attempt, exam, problemConfig, code, language
     throw error;
   }
 
+  // Handle design problems (no test cases required)
+  if (problem.problemType === "design") {
+    const answer = {
+      problemId: problem._id,
+      code,
+      language,
+      input: String(input || ""),
+      output: "",
+      passed: 0,
+      total: 0,
+      passedPublic: 0,
+      totalPublic: 0,
+      passedHidden: 0,
+      totalHidden: 0,
+      marks: problemConfig.marks,
+      score: problemConfig.marks, // Award full marks for design problems
+      finalScore: problemConfig.marks,
+      manualOverride: false,
+      submittedAt: new Date(),
+      details: [],
+      isDesignProblem: true
+    };
+
+    const testResults = [];
+
+    let submission = await Submission.findOne({ userId: studentId, examId: exam._id });
+    if (!submission) {
+      submission = await Submission.create({
+        userId: studentId,
+        examId: exam._id,
+        examAttemptId: attempt._id,
+        problems: []
+      });
+    }
+
+    const newProblemData = {
+      problemId: problem._id,
+      code,
+      language,
+      input: String(input || ""),
+      output: "",
+      score: problemConfig.marks,
+      maxMarks: Number(problemConfig.marks || 0),
+      passed: 0,
+      total: 0,
+      passedPublic: 0,
+      totalPublic: 0,
+      passedHidden: 0,
+      totalHidden: 0,
+      testResults: [],
+      manualOverride: false,
+      submittedAt: new Date(),
+      isDesignProblem: true
+    };
+
+    const existingIndex = submission.problems.findIndex((item) => String(item.problemId) === String(problem._id));
+    if (existingIndex !== -1) {
+      submission.problems.set(existingIndex, newProblemData);
+    } else {
+      submission.problems.push(newProblemData);
+    }
+
+    submission.examAttemptId = attempt._id;
+    await submission.save();
+
+    return { 
+      answer, 
+      evaluation: {
+        passed: 0,
+        total: 0,
+        passedPublic: 0,
+        totalPublic: 0,
+        passedHidden: 0,
+        totalHidden: 0,
+        details: [],
+        isDesignProblem: true
+      }, 
+      submission 
+    };
+  }
+
+  // Handle testcase problems with evaluation
   const evaluation = await evaluateSubmission({ code, language, problem, visibility: "all" });
   const score = computeScore(
     evaluation.totalHidden > 0 ? evaluation.passedHidden : evaluation.passed,

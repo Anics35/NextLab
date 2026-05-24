@@ -77,6 +77,7 @@ function serializeAnswerResult(answer, exam) {
     })),
     score: answer?.score || 0,
     finalScore: answer?.finalScore ?? answer?.score ?? 0,
+    isDesignProblem: Boolean(answer?.isDesignProblem),
     serverTime: new Date().toISOString(),
     remainingTime: exam ? getRemainingTimeSeconds(exam) : 0
   };

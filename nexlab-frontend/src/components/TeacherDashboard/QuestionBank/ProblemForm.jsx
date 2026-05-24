@@ -26,6 +26,8 @@ function ProblemForm({ problemForm, setProblemForm, onSubmit, isLoading, editing
     }));
   };
 
+  const isDesignProblem = problemForm.problemType === 'design';
+
   return (
     <div className="mb-4">
       {editingId && (
@@ -50,93 +52,111 @@ function ProblemForm({ problemForm, setProblemForm, onSubmit, isLoading, editing
           <option value="medium">medium</option>
           <option value="hard">hard</option>
         </select>
+        <select
+          className={inputClass}
+          value={problemForm.problemType}
+          onChange={(event) => setProblemForm((prev) => ({ ...prev, problemType: event.target.value }))}
+        >
+          <option value="testcase">Test Case Problem</option>
+          <option value="design">Design Problem</option>
+        </select>
+        {isDesignProblem && (
+          <div className="flex items-center gap-2 rounded-md border border-blue-700/50 bg-blue-900/20 px-3 py-2">
+            <span className="text-sm text-blue-300">No test cases needed</span>
+          </div>
+        )}
         <textarea
-          className={`${inputClass} resize-none md:col-span-2`}
+          className={`${inputClass} resize-none ${isDesignProblem ? 'md:col-span-2' : 'md:col-span-2'}`}
           rows={3}
           value={problemForm.description}
           onChange={(event) => setProblemForm((prev) => ({ ...prev, description: event.target.value }))}
           placeholder="Problem description"
         />
 
-        {/* Public Test Cases */}
-        <div className="md:col-span-2 border border-gray-700 rounded-md p-3">
-          <p className="text-sm text-gray-300 mb-2">Public Test Cases</p>
-          <div className="flex flex-col gap-2">
-            {problemForm.publicTestCases.map((tc, idx) => (
-              <div key={`pub-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input
-                  className={inputClass}
-                  value={tc.input}
-                  onChange={(e) => updateTestCase('public', idx, 'input', e.target.value)}
-                  placeholder="Input"
-                />
-                <input
-                  className={inputClass}
-                  value={tc.output}
-                  onChange={(e) => updateTestCase('public', idx, 'output', e.target.value)}
-                  placeholder="Output"
-                />
+        {/* Test Cases - Only show for testcase problems */}
+        {!isDesignProblem && (
+          <>
+            {/* Public Test Cases */}
+            <div className="md:col-span-2 border border-gray-700 rounded-md p-3">
+              <p className="text-sm text-gray-300 mb-2">Public Test Cases</p>
+              <div className="flex flex-col gap-2">
+                {problemForm.publicTestCases.map((tc, idx) => (
+                  <div key={`pub-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      className={inputClass}
+                      value={tc.input}
+                      onChange={(e) => updateTestCase('public', idx, 'input', e.target.value)}
+                      placeholder="Input"
+                    />
+                    <input
+                      className={inputClass}
+                      value={tc.output}
+                      onChange={(e) => updateTestCase('public', idx, 'output', e.target.value)}
+                      placeholder="Output"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              className="bg-[#ffa116] text-black px-3 py-1 rounded-md"
-              onClick={() => addTestCase('public')}
-            >
-              Add Public
-            </button>
-            <button
-              type="button"
-              className="bg-gray-700 text-white px-3 py-1 rounded-md disabled:opacity-50"
-              disabled={problemForm.publicTestCases.length <= 1}
-              onClick={() => removeTestCase('public', problemForm.publicTestCases.length - 1)}
-            >
-              Remove Last
-            </button>
-          </div>
-        </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="bg-[#ffa116] text-black px-3 py-1 rounded-md"
+                  onClick={() => addTestCase('public')}
+                >
+                  Add Public
+                </button>
+                <button
+                  type="button"
+                  className="bg-gray-700 text-white px-3 py-1 rounded-md disabled:opacity-50"
+                  disabled={problemForm.publicTestCases.length <= 1}
+                  onClick={() => removeTestCase('public', problemForm.publicTestCases.length - 1)}
+                >
+                  Remove Last
+                </button>
+              </div>
+            </div>
 
-        {/* Hidden Test Cases */}
-        <div className="md:col-span-2 border border-gray-700 rounded-md p-3">
-          <p className="text-sm text-gray-300 mb-2">Hidden Test Cases</p>
-          <div className="flex flex-col gap-2">
-            {problemForm.hiddenTestCases.map((tc, idx) => (
-              <div key={`hidden-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input
-                  className={inputClass}
-                  value={tc.input}
-                  onChange={(e) => updateTestCase('hidden', idx, 'input', e.target.value)}
-                  placeholder="Input"
-                />
-                <input
-                  className={inputClass}
-                  value={tc.output}
-                  onChange={(e) => updateTestCase('hidden', idx, 'output', e.target.value)}
-                  placeholder="Output"
-                />
+            {/* Hidden Test Cases */}
+            <div className="md:col-span-2 border border-gray-700 rounded-md p-3">
+              <p className="text-sm text-gray-300 mb-2">Hidden Test Cases</p>
+              <div className="flex flex-col gap-2">
+                {problemForm.hiddenTestCases.map((tc, idx) => (
+                  <div key={`hidden-${idx}`} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      className={inputClass}
+                      value={tc.input}
+                      onChange={(e) => updateTestCase('hidden', idx, 'input', e.target.value)}
+                      placeholder="Input"
+                    />
+                    <input
+                      className={inputClass}
+                      value={tc.output}
+                      onChange={(e) => updateTestCase('hidden', idx, 'output', e.target.value)}
+                      placeholder="Output"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              className="bg-[#ffa116] text-black px-3 py-1 rounded-md"
-              onClick={() => addTestCase('hidden')}
-            >
-              Add Hidden
-            </button>
-            <button
-              type="button"
-              className="bg-gray-700 text-white px-3 py-1 rounded-md disabled:opacity-50"
-              disabled={problemForm.hiddenTestCases.length <= 1}
-              onClick={() => removeTestCase('hidden', problemForm.hiddenTestCases.length - 1)}
-            >
-              Remove Last
-            </button>
-          </div>
-        </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="bg-[#ffa116] text-black px-3 py-1 rounded-md"
+                  onClick={() => addTestCase('hidden')}
+                >
+                  Add Hidden
+                </button>
+                <button
+                  type="button"
+                  className="bg-gray-700 text-white px-3 py-1 rounded-md disabled:opacity-50"
+                  disabled={problemForm.hiddenTestCases.length <= 1}
+                  onClick={() => removeTestCase('hidden', problemForm.hiddenTestCases.length - 1)}
+                >
+                  Remove Last
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">

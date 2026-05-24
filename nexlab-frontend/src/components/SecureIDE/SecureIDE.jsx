@@ -341,6 +341,7 @@ function SecureIDE({
             onSubmit={() => submitCurrentProblem?.(syncEditorCode())}
             currentProblemSubmitted={currentProblemSubmitted}
             effectiveLocked={effectiveLocked}
+            currentProblem={currentProblem}
           />
 
           <CodeEditorPanel
@@ -357,7 +358,7 @@ function SecureIDE({
 
         <SplitPanelDivider type="right" onMouseDown={startDragging} />
 
-        <OutputPanel input={input} setInput={setInput} output={output} result={result} effectiveLocked={effectiveLocked} isSubmitting={isSubmitting} />
+        <OutputPanel input={input} setInput={setInput} output={output} result={result} effectiveLocked={effectiveLocked} isSubmitting={isSubmitting} currentProblem={currentProblem} />
       </main>
     </div>
   );

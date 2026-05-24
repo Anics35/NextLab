@@ -7,11 +7,23 @@ function ProblemList({ problems, onEdit, onDelete, isDeletingId }) {
       {problems.length === 0 && <p className="text-gray-400">No problems found.</p>}
       {problems.map((problem) => (
         <div key={problem._id} className="bg-[#0a0a0a] p-3 rounded-md flex flex-col gap-3 border border-gray-800">
-          <div className="flex justify-between items-center gap-4">
+          <div className="flex justify-between items-start gap-4">
             <span className="text-white">{problem.title || 'Untitled'}</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>
-              {problem.difficulty || 'Unknown'}
-            </span>
+            <div className="flex gap-2 flex-wrap">
+              <span className={`text-xs px-2 py-1 rounded-full ${difficultyBadgeClass(problem.difficulty)}`}>
+                {problem.difficulty || 'Unknown'}
+              </span>
+              {problem.problemType === 'design' && (
+                <span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-300 border border-blue-700/50">
+                  Design
+                </span>
+              )}
+              {problem.problemType === 'testcase' && (
+                <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-300 border border-green-700/50">
+                  Testcase
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex gap-2">
             <button

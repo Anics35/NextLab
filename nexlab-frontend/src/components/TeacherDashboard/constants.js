@@ -20,6 +20,7 @@ export const DEFAULT_PROBLEM_FORM = {
   title: '',
   description: '',
   difficulty: 'easy',
+  problemType: 'testcase',
   publicTestCases: [{ input: '', output: '' }],
   hiddenTestCases: [{ input: '', output: '' }]
 };
