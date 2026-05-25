@@ -99,6 +99,7 @@ function App() {
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [isExamLocked, setIsExamLocked] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [confirmSubmitExam, setConfirmSubmitExam] = useState(false);
   const [lastRunCodeMap, setLastRunCodeMap] = useState({});
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -443,16 +444,12 @@ function App() {
     if (!exam) return;
 
     if (!isExamLocked && isExamStarted) {
-      const shouldSubmit = window.confirm('This exam is still ongoing. Do you want to submit and close it?');
-      if (!shouldSubmit) {
-        return;
-      }
-      void finalizeExamSession('manual');
+      setConfirmSubmitExam(true);
       return;
     }
 
     returnToDashboard();
-  }, [exam, finalizeExamSession, isExamLocked, isExamStarted, returnToDashboard]);
+  }, [exam, isExamLocked, isExamStarted, returnToDashboard]);
 
   const handleExitFromResults = useCallback(() => {
     setShowExitConfirm(false);
@@ -796,6 +793,41 @@ function App() {
               </div>
             )}
           </section>
+        </div>
+      )}
+
+      {/* Submit Exam Confirmation Modal */}
+      {confirmSubmitExam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#0a0a0a] p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white">Submit Exam</h3>
+            <p className="mt-2 text-gray-300">
+              This exam is still ongoing. Do you want to submit and close it?
+            </p>
+            <p className="mt-3 text-sm text-gray-400">Any unsaved changes will be lost.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmSubmitExam(false)}
+                disabled={isSubmitting}
+                className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Continue Exam
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmSubmitExam(false);
+                  void finalizeExamSession('manual');
+                }}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isSubmitting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                Submit
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

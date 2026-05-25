@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { getAuthToken, getStoredUser, logout } from '../../services/authService';
-import { getMyCourses, getCourseExams, getCourseById, createExam, deleteCourse, updateCourse } from '../../services/api';
+import { getMyCourses, getCourseExams, getCourseById, createExam, deleteCourse, updateCourse, removeStudentFromCourse } from '../../services/api';
 import { getProblems } from '../../services/codeService';
 import { initSocket, socket } from '../../services/socket';
 import AppLayout from '../layout/AppLayout';
@@ -46,6 +46,8 @@ function TeacherDashboard() {
   const [courseEditForm, setCourseEditForm] = useState(DEFAULT_COURSE_FORM);
   const [isSavingCourse, setIsSavingCourse] = useState(false);
   const [isDeletingCourse, setIsDeletingCourse] = useState(false);
+  const [isRemovingStudent, setIsRemovingStudent] = useState(false);
+  const [confirmDeleteCourse, setConfirmDeleteCourse] = useState(null);
 
   // Problems
   const [problems, setProblems] = useState([]);
@@ -229,6 +231,25 @@ function TeacherDashboard() {
     setIsDeletingCourse(false);
   };
 
+  const handleRemoveStudent = async (courseId, studentId) => {
+    setIsRemovingStudent(true);
+    try {
+      const response = await removeStudentFromCourse(courseId, studentId);
+      const updatedCourse = response.course || null;
+      if (updatedCourse) {
+        setSelectedCourseDetail(updatedCourse);
+        setCourses((prev) =>
+          prev.map((course) => (course._id === updatedCourse._id ? { ...course, ...updatedCourse } : course))
+        );
+      }
+      toast.success('Student removed from course.');
+    } catch (error) {
+      toast.error(error.message || 'Unable to remove student from course.');
+    } finally {
+      setIsRemovingStudent(false);
+    }
+  };
+
   const sidebar = (
     <>
       <div className="mb-4">
@@ -304,34 +325,13 @@ function TeacherDashboard() {
               if (!selectedCourseDetail?._id) {
                 return;
               }
-
-              const confirmed = window.confirm(
-                `Delete ${selectedCourseDetail.title || 'this course'}? This will also remove related exams and submissions.`
-              );
-              if (!confirmed) {
-                return;
-              }
-
-              setIsDeletingCourse(true);
-              try {
-                await deleteCourse(selectedCourseDetail._id);
-                setExamForm((prev) => ({ ...prev, courseId: '' }));
-                const nextCourses = await loadWorkspace();
-                const remainingCourses = Array.isArray(nextCourses) ? nextCourses : [];
-                const nextSelectedCourseId = remainingCourses[0]?._id || '';
-                setSelectedCourseId(nextSelectedCourseId);
-                setSelectedCourseDetail(null);
-                setCourseEditForm(DEFAULT_COURSE_FORM);
-                toast.success('Course deleted.');
-              } catch (error) {
-                toast.error(error.message || 'Unable to delete course.');
-              } finally {
-                setIsDeletingCourse(false);
-              }
+              setConfirmDeleteCourse(selectedCourseDetail);
             }}
+            onRemoveStudent={handleRemoveStudent}
             onClose={closeCourseDetail}
             isSaving={isSavingCourse}
             isDeleting={isDeletingCourse}
+            isRemovingStudent={isRemovingStudent}
           />
         ) : (
           <CoursesTab
@@ -433,6 +433,56 @@ function TeacherDashboard() {
         isOpen={isProctorAlertsOpen}
         onClose={() => setIsProctorAlertsOpen(false)}
       />
+
+      {/* Delete Course Confirmation Modal */}
+      {confirmDeleteCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#0a0a0a] p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white">Delete Course</h3>
+            <p className="mt-2 text-gray-300">
+              Are you sure you want to delete <span className="font-semibold">{confirmDeleteCourse.title}</span>?
+            </p>
+            <p className="mt-3 text-sm text-gray-400">This will also remove all related exams and submissions. This action cannot be undone.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteCourse(null)}
+                disabled={isDeletingCourse}
+                className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsDeletingCourse(true);
+                  try {
+                    await deleteCourse(confirmDeleteCourse._id);
+                    setExamForm((prev) => ({ ...prev, courseId: '' }));
+                    const nextCourses = await loadWorkspace();
+                    const remainingCourses = Array.isArray(nextCourses) ? nextCourses : [];
+                    const nextSelectedCourseId = remainingCourses[0]?._id || '';
+                    setSelectedCourseId(nextSelectedCourseId);
+                    setSelectedCourseDetail(null);
+                    setCourseEditForm(DEFAULT_COURSE_FORM);
+                    setConfirmDeleteCourse(null);
+                    toast.success('Course deleted.');
+                  } catch (error) {
+                    toast.error(error.message || 'Unable to delete course.');
+                  } finally {
+                    setIsDeletingCourse(false);
+                  }
+                }}
+                disabled={isDeletingCourse}
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeletingCourse && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

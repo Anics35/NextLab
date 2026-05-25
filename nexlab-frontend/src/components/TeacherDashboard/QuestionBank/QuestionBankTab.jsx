@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { LoaderCircle } from 'lucide-react';
 import { createProblem, updateProblem, deleteProblem } from '../../../services/api';
 import { cardClass, DEFAULT_PROBLEM_FORM } from '../constants';
 import ProblemForm from './ProblemForm';
@@ -32,6 +33,8 @@ function QuestionBankTab({
       return titleMatch && difficultyMatch;
     });
   }, [difficultyFilter, problems, query]);
+
+  const [confirmDeleteProblem, setConfirmDeleteProblem] = useState(null);
 
   const handleCreateProblem = async () => {
     if (!problemForm.title.trim() || !problemForm.description.trim()) {
@@ -101,22 +104,7 @@ function QuestionBankTab({
   };
 
   const handleDeleteProblem = async (problem) => {
-    const shouldDelete = window.confirm(`Delete problem "${problem.title || 'Untitled'}"? This cannot be undone.`);
-    if (!shouldDelete) return;
-
-    setIsDeletingProblemId(problem._id);
-    try {
-      await deleteProblem(problem._id);
-      toast.success('Problem deleted.');
-      if (editingProblemId === problem._id) {
-        resetProblemForm();
-      }
-      await onRefresh();
-    } catch (error) {
-      toast.error(error.message || 'Unable to delete problem.');
-    } finally {
-      setIsDeletingProblemId('');
-    }
+    setConfirmDeleteProblem(problem);
   };
 
   const handleEditProblem = (problem) => {
@@ -163,6 +151,53 @@ function QuestionBankTab({
         onDelete={handleDeleteProblem}
         isDeletingId={isDeletingProblemId}
       />
+
+      {/* Delete Problem Confirmation Modal */}
+      {confirmDeleteProblem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#0a0a0a] p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white">Delete Problem</h3>
+            <p className="mt-2 text-gray-300">
+              Are you sure you want to delete <span className="font-semibold">{confirmDeleteProblem.title || 'Untitled'}</span>?
+            </p>
+            <p className="mt-3 text-sm text-gray-400">This action cannot be undone.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProblem(null)}
+                disabled={isDeletingProblemId === confirmDeleteProblem._id}
+                className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsDeletingProblemId(confirmDeleteProblem._id);
+                  try {
+                    await deleteProblem(confirmDeleteProblem._id);
+                    toast.success('Problem deleted.');
+                    if (editingProblemId === confirmDeleteProblem._id) {
+                      resetProblemForm();
+                    }
+                    setConfirmDeleteProblem(null);
+                    await onRefresh();
+                  } catch (error) {
+                    toast.error(error.message || 'Unable to delete problem.');
+                  } finally {
+                    setIsDeletingProblemId('');
+                  }
+                }}
+                disabled={isDeletingProblemId === confirmDeleteProblem._id}
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeletingProblemId === confirmDeleteProblem._id && <LoaderCircle size={16} className="animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

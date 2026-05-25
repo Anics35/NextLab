@@ -150,4 +150,10 @@ export const updateExamVisibility = (examId, visibleToStudents) =>
     'Unable to update exam visibility.'
   );
 
+export const removeStudentFromCourse = (courseId, studentId) =>
+  request(
+    api.delete(`/course/${courseId}/student/${studentId}`),
+    'Unable to remove student from course.'
+  );
+
 export default api;

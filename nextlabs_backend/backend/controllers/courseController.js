@@ -244,4 +244,43 @@ async function deleteCourse(req, res, next) {
   }
 }
 
-module.exports = { createCourse, getCourse, joinCourse, listMyCourses, updateCourse, deleteCourse };
+async function removeStudentFromCourse(req, res, next) {
+  try {
+    const { courseId, studentId } = req.params;
+
+    if (!isValidObjectId(courseId)) {
+      throw createApiError(400, "Course id must be a valid MongoDB ObjectId", "INVALID_COURSE_ID");
+    }
+
+    if (!isValidObjectId(studentId)) {
+      throw createApiError(400, "Student id must be a valid MongoDB ObjectId", "INVALID_STUDENT_ID");
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw createApiError(404, "Course not found", "COURSE_NOT_FOUND");
+    }
+
+    // Only the teacher can remove students
+    if (String(course.teacherId) !== req.user.id) {
+      throw createApiError(403, "Only the course teacher can remove students", "FORBIDDEN");
+    }
+
+    const isEnrolled = course.students.some((id) => String(id) === studentId);
+    if (!isEnrolled) {
+      throw createApiError(404, "Student is not enrolled in this course", "STUDENT_NOT_FOUND");
+    }
+
+    await Course.updateOne({ _id: courseId }, { $pull: { students: studentId } });
+
+    const updatedCourse = await Course.findById(courseId)
+      .populate("teacherId", "name email")
+      .populate("students", "name email role rollNumber semester");
+
+    res.json({ success: true, message: "Student removed from course", course: updatedCourse });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createCourse, getCourse, joinCourse, listMyCourses, updateCourse, deleteCourse, removeStudentFromCourse };

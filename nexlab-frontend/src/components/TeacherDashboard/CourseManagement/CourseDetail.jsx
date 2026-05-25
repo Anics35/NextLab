@@ -1,4 +1,5 @@
-import { LoaderCircle } from 'lucide-react';
+import { useState } from 'react';
+import { LoaderCircle, Trash2, X } from 'lucide-react';
 import { cardClass, inputClass } from '../constants';
 
 function CourseDetail({
@@ -11,9 +12,12 @@ function CourseDetail({
   onSave,
   onDelete,
   onClose,
+  onRemoveStudent,
   isSaving,
-  isDeleting
+  isDeleting,
+  isRemovingStudent
 }) {
+  const [confirmRemoveStudent, setConfirmRemoveStudent] = useState(null);
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
 
@@ -149,10 +153,56 @@ function CourseDetail({
                       <p className="text-sm text-gray-400">Roll No: {student.rollNumber || '-'}</p>
                       <p className="text-sm text-gray-400">Semester: {student.semester || '-'}</p>
                     </div>
-                    <span className="text-xs rounded-full bg-white/5 border border-white/10 px-2 py-1 text-gray-300">{student.email || 'No email'}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs rounded-full bg-white/5 border border-white/10 px-2 py-1 text-gray-300">{student.email || 'No email'}</span>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRemoveStudent({ studentId: student._id, studentName: student.name })}
+                        disabled={isRemovingStudent}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-600/20 px-2 py-1 text-xs text-red-400 hover:bg-red-600/30 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Student Confirmation Modal */}
+      {confirmRemoveStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#0a0a0a] p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white">Remove Student</h3>
+            <p className="mt-2 text-gray-300">
+              Are you sure you want to remove <span className="font-semibold">{confirmRemoveStudent.studentName}</span> from this course?
+            </p>
+            <p className="mt-3 text-sm text-gray-400">This action cannot be undone.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveStudent(null)}
+                disabled={isRemovingStudent}
+                className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveStudent(selectedCourseDetail._id, confirmRemoveStudent.studentId);
+                  setConfirmRemoveStudent(null);
+                }}
+                disabled={isRemovingStudent}
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isRemovingStudent && <LoaderCircle size={16} className="animate-spin" />}
+                Remove
+              </button>
             </div>
           </div>
         </div>
