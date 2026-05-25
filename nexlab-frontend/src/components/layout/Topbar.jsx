@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import UserProfileModal from './UserProfileModal';
 
@@ -6,6 +6,10 @@ function Topbar({ user, onLogout }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
+
+  useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
 
   const userName = currentUser?.name || 'User';
   const userEmail = currentUser?.email || 'No email';
@@ -61,7 +65,7 @@ function Topbar({ user, onLogout }) {
                 {/* User Info Section */}
                 <div className="px-4 py-3 border-b border-gray-800 bg-[#111]">
                   <p className="text-sm font-semibold text-white">{userName}</p>
-                  <p className="text-xs text-gray-400 mt-1 break-words">{userEmail}</p>
+                  <p className="text-xs text-gray-400 mt-1 wrap-break-word">{userEmail}</p>
                   <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-md bg-[#ffa116]/10 border border-[#ffa116]/20">
                     <User size={12} className="text-[#ffa116]" />
                     <span className="text-xs font-medium text-[#ffa116]">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</span>
