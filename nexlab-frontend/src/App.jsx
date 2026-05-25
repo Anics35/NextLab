@@ -3,6 +3,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import { AlertTriangle, BookOpen, FileText, LogOut, ShieldCheck } from 'lucide-react';
 
 import AuthForm from './components/AuthForm';
+import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import SecureIDE from './components/SecureIDE/SecureIDE';
 import StudentDashboard from './components/StudentDashboard/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard/TeacherDashboard';
@@ -619,6 +620,7 @@ function App() {
   }, [courseExams]);
 
   if (!user) return <AuthForm onAuthSuccess={setUser} />;
+  if (user.role === 'admin') return <AdminDashboard />;
   if (user.role === 'teacher') return <TeacherDashboard />;
 
   const showResultPanel = Boolean(isExamLocked && attempt);

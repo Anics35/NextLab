@@ -156,4 +156,57 @@ export const removeStudentFromCourse = (courseId, studentId) =>
     'Unable to remove student from course.'
   );
 
+export const getAdminSummary = () =>
+  request(api.get('/admin/summary'), 'Unable to load admin summary.');
+
+export const getAdminUsers = () =>
+  request(api.get('/admin/users'), 'Unable to load users.');
+
+export const deleteAdminUser = (userId) =>
+  request(api.delete(`/admin/users/${userId}`), 'Unable to delete user.');
+
+export const getAdminUserActivity = (userId) =>
+  request(api.get(`/admin/users/${userId}/activity`), 'Unable to load account activity.');
+
+export const setAdminUserDisabled = (userId, disabled) =>
+  request(api.patch(`/admin/users/${userId}/disable`, { disabled }), 'Unable to update account status.');
+
+export const getAdminCourses = () =>
+  request(api.get('/admin/courses'), 'Unable to load courses.');
+
+export const deleteAdminCourse = (courseId) =>
+  request(api.delete(`/admin/courses/${courseId}`), 'Unable to delete course.');
+
+export const setAdminCourseArchived = (courseId, archived) =>
+  request(api.patch(`/admin/courses/${courseId}/archive`, { archived }), 'Unable to update course archive status.');
+
+export const getAdminExams = () =>
+  request(api.get('/admin/exams'), 'Unable to load exams.');
+
+export const deleteAdminExam = (examId) =>
+  request(api.delete(`/admin/exams/${examId}`), 'Unable to delete exam.');
+
+export const setAdminExamHidden = (examId, hidden) =>
+  request(api.patch(`/admin/exams/${examId}/hide`, { hidden }), 'Unable to update exam visibility.');
+
+export const getAdminAnalytics = () =>
+  request(api.get('/admin/monitoring/analytics'), 'Unable to load platform analytics.');
+
+export const getAdminProctorLogs = () =>
+  request(api.get('/admin/monitoring/proctor-logs'), 'Unable to load proctor logs.');
+
+export const getAdminActivityLogs = () =>
+  request(api.get('/admin/monitoring/activity-logs'), 'Unable to load activity logs.');
+
+export const getAdminSubmissions = () =>
+  request(api.get('/admin/monitoring/submissions'), 'Unable to load submissions.');
+
+export const getAdminReports = () =>
+  request(api.get('/admin/monitoring/reports'), 'Unable to load reports.');
+
+export const downloadAdminReports = async () => {
+  const response = await api.get('/admin/monitoring/reports/download', { responseType: 'blob' });
+  return response.data;
+};
+
 export default api;

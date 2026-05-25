@@ -41,6 +41,7 @@ const examSchema = new mongoose.Schema(
       default: "manual"
     },
     resultsVisible: { type: Boolean, default: false },
+    hidden: { type: Boolean, default: false, index: true },
     visibleToStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", index: true }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }
   },

@@ -3,6 +3,7 @@ require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
 const activityRoutes = require("./routes/activityRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const authRoutes = require("./routes/authRoutes");
 const codeRoutes = require("./routes/codeRoutes");
@@ -38,6 +39,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/auth", authRoutes);
+app.use("/admin", adminRoutes);
 app.use("/", codeRoutes);
 app.use("/course", courseRoutes);
 app.use("/courses", courseRoutes);

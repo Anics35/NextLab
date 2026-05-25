@@ -84,6 +84,10 @@ async function joinCourse(req, res, next) {
       throw createApiError(404, "Course not found for course code", "COURSE_NOT_FOUND");
     }
 
+    if (course.archived) {
+      throw createApiError(403, "Course is archived", "COURSE_ARCHIVED");
+    }
+
     const alreadyJoined = course.students.some((studentId) => String(studentId) === req.user.id);
     if (alreadyJoined) {
       throw createApiError(409, "Student already joined this course", "COURSE_ALREADY_JOINED");
@@ -102,7 +106,7 @@ async function listMyCourses(req, res, next) {
   try {
     const filter = req.user.role === "teacher"
       ? { teacherId: req.user.id }
-      : { students: req.user.id };
+      : { students: req.user.id, archived: { $ne: true } };
 
     const courses = await Course.find(filter)
       .populate("teacherId", "name email")
@@ -131,10 +135,13 @@ async function getCourse(req, res, next) {
       throw createApiError(404, "Course not found", "COURSE_NOT_FOUND");
     }
 
-    const isTeacher = String(course.teacherId._id) === req.user.id;
+    const isTeacher = String(course.teacherId?._id || "") === req.user.id;
     const isStudent = course.students.some((student) => String(student._id) === req.user.id);
     if (!isTeacher && !isStudent) {
       throw createApiError(403, "You are not part of this course", "FORBIDDEN");
+    }
+    if (isStudent && !isTeacher && course.archived) {
+      throw createApiError(403, "Course is archived", "COURSE_ARCHIVED");
     }
 
     res.json({ success: true, course });

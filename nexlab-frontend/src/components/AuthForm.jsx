@@ -41,7 +41,7 @@ const AuthForm = ({ onAuthSuccess }) => {
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
                 >
                   <option value="student">Student</option>
-                  <option value="teacher">Teacher (Admin)</option>
+                  <option value="teacher">Teacher</option>
                 </select>
               </div>
               {formData.role === 'student' && (

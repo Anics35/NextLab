@@ -169,6 +169,9 @@ async function listCourseExams(req, res, next) {
     if (!isTeacher && !isStudent) {
       throw createApiError(403, "You are not part of this course", "FORBIDDEN");
     }
+    if (isStudent && !isTeacher && course.archived) {
+      throw createApiError(403, "Course is archived", "COURSE_ARCHIVED");
+    }
 
     const exams = await Exam.find({ courseId })
       .populate("problems.problemId", "title difficulty")
@@ -178,7 +181,7 @@ async function listCourseExams(req, res, next) {
     let filteredExams = exams;
     if (isStudent && !isTeacher) {
       filteredExams = exams.filter((exam) =>
-        exam.visibleToStudents && exam.visibleToStudents.some((sid) => String(sid) === req.user.id)
+        !exam.hidden && exam.visibleToStudents && exam.visibleToStudents.some((sid) => String(sid) === req.user.id)
       );
     }
 
@@ -213,7 +216,7 @@ async function getExam(req, res, next) {
 
     if (isStudent && !isTeacher) {
       const hasAccess = exam.visibleToStudents && exam.visibleToStudents.some((sid) => String(sid) === req.user.id);
-      if (!hasAccess) {
+      if (exam.hidden || !hasAccess) {
         throw createApiError(403, "You don't have access to this exam", "FORBIDDEN");
       }
     }

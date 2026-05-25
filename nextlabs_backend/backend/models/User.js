@@ -7,10 +7,11 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["student", "teacher"],
+      enum: ["student", "teacher", "admin"],
       default: "student",
       index: true
     },
+    disabled: { type: Boolean, default: false, index: true },
     rollNumber: { type: String, trim: true, index: true, sparse: true },
     semester: { type: String, trim: true, sparse: true },
     phone: { type: String, trim: true, sparse: true }

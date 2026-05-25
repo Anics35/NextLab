@@ -24,11 +24,16 @@ async function authenticate(req, res, next) {
       throw createApiError(401, "Authenticated user no longer exists", "USER_NOT_FOUND");
     }
 
+    if (user.disabled) {
+      throw createApiError(403, "This account has been disabled", "ACCOUNT_DISABLED");
+    }
+
     req.user = {
       id: String(user._id),
       name: user.name,
       email: user.email,
       role: user.role,
+      disabled: user.disabled,
       rollNumber: user.rollNumber,
       semester: user.semester
     };

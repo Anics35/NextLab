@@ -4,6 +4,9 @@ const { createActiveSession } = require("../services/sessionService");
 const { createApiError } = require("../utils/apiError");
 const { isBlank } = require("../utils/validators");
 
+const ADMIN_EMAIL = "admin@nexlab.local";
+const ADMIN_PASSWORD = "Admin@12345";
+
 function toAuthResponse(user, token) {
   return {
     success: true,
@@ -13,11 +16,38 @@ function toAuthResponse(user, token) {
       name: user.name,
       email: user.email,
       role: user.role,
+      disabled: user.disabled,
       rollNumber: user.rollNumber,
       semester: user.semester,
       phone: user.phone
     }
   };
+}
+
+async function getOrCreateHardcodedAdmin() {
+  const email = ADMIN_EMAIL.toLowerCase().trim();
+  let user = await User.findOne({ email });
+
+  if (user && user.role !== "admin") {
+    throw createApiError(409, "Admin email is already used by another account", "ADMIN_EMAIL_CONFLICT");
+  }
+
+  if (!user) {
+    user = await User.create({
+      name: "Platform Admin",
+      email,
+      passwordHash: hashPassword(ADMIN_PASSWORD),
+      role: "admin",
+      disabled: false
+    });
+  }
+
+  if (!verifyPassword(ADMIN_PASSWORD, user.passwordHash)) {
+    user.passwordHash = hashPassword(ADMIN_PASSWORD);
+    await user.save();
+  }
+
+  return user;
 }
 
 async function register(req, res, next) {
@@ -69,9 +99,17 @@ async function login(req, res, next) {
       throw createApiError(400, "email and password are required", "MISSING_FIELDS");
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = normalizedEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD
+      ? await getOrCreateHardcodedAdmin()
+      : await User.findOne({ email: normalizedEmail });
+
     if (!user || !verifyPassword(password, user.passwordHash)) {
       throw createApiError(401, "Invalid email or password", "INVALID_CREDENTIALS");
+    }
+
+    if (user.disabled) {
+      throw createApiError(403, "This account has been disabled", "ACCOUNT_DISABLED");
     }
 
     const sessionToken = await createActiveSession(user._id);
