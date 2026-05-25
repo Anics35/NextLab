@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import { ChevronDown, LogOut, Settings } from 'lucide-react';
 import UserProfileModal from './UserProfileModal';
 
 function Topbar({ user, onLogout }) {
@@ -47,23 +47,15 @@ function Topbar({ user, onLogout }) {
             <button
               type="button"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="group flex min-w-[170px] items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition-all hover:border-white/15 hover:bg-white/10"
+              className="group flex min-w-[170px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/5"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/12 to-white/5 border border-white/10 text-sm font-semibold text-white">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/12 to-white/5 text-sm font-semibold text-white ring-1 ring-white/10">
                 {userInitial}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="hidden sm:block truncate text-sm font-semibold text-white">{userName}</div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/60">
-                    {displayRole}
-                  </span>
-                  {rollNumber ? (
-                    <span className="rounded-full border border-[#f59e0b]/20 bg-[#f59e0b]/10 px-2 py-0.5 text-[10px] font-medium text-[#fbbf24]">
-                      Roll {rollNumber}
-                    </span>
-                  ) : null}
-                </div>
+                <div className="hidden sm:block truncate text-sm font-semibold leading-tight text-white">{userName}</div>
+                <div className="hidden sm:block truncate text-xs text-white/55">{displayRole}{rollNumber ? ` • Roll ${rollNumber}` : ''}</div>
+                <div className="sm:hidden truncate text-xs text-white/55">{displayRole}{rollNumber ? ` • Roll ${rollNumber}` : ''}</div>
               </div>
               <ChevronDown
                 size={16}
@@ -75,7 +67,7 @@ function Topbar({ user, onLogout }) {
             {isDropdownOpen && (
               <div className="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b0b]/95 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                 {/* User Info Section */}
-                <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent px-4 py-4">
+                <div className="border-b border-white/10 px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#f97316] text-sm font-bold text-black shadow-[0_12px_24px_rgba(245,158,11,0.18)]">
                       {userInitial}
@@ -83,18 +75,8 @@ function Topbar({ user, onLogout }) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-white">{userName}</p>
                       <p className="truncate text-xs text-white/45">{userEmail}</p>
+                      <p className="mt-1 truncate text-xs text-white/60">{displayRole}{rollNumber ? ` • Roll ${rollNumber}` : ''}</p>
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/75">
-                      <User size={12} className="text-[#f59e0b]" />
-                      {displayRole}
-                    </span>
-                    {rollNumber ? (
-                      <span className="rounded-full border border-[#f59e0b]/20 bg-[#f59e0b]/10 px-2.5 py-1 text-[11px] font-medium text-[#fbbf24]">
-                        Roll {rollNumber}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
 
