@@ -111,7 +111,7 @@ function App() {
   const currentProblemState = problemStates[currentProblemId] || buildProblemState(currentProblem);
   const isPerProblemTimer = exam?.timerType === 'per_problem';
   const currentPerProblemTimeLeft = currentProblemId ? perProblemRemaining[currentProblemId] ?? 0 : 0;
-  const isCurrentProblemLocked = isPerProblemTimer && currentPerProblemTimeLeft <= 0;
+    const isCurrentProblemLocked = isPerProblemTimer && currentPerProblemTimeLeft < 0;
   const examId = exam?._id || null;
 
   const canShowResults = Boolean(
@@ -538,9 +538,11 @@ function App() {
 
     const tick = () => {
       const serverNow = Date.now() + serverTimeOffset;
-      const secondsLeft = Math.max(0, Math.floor((endTimeMs - serverNow) / 1000));
+      const rawSecondsLeft = Math.floor((endTimeMs - serverNow) / 1000);
+      const secondsLeft = Math.max(0, rawSecondsLeft);
       setRemainingTime(secondsLeft);
-      if (secondsLeft === 13 && !isExamLocked) {
+      // Only finalize when the server clock has passed the exam end (rawSecondsLeft < 0).
+      if (rawSecondsLeft < 0 && !isExamLocked) {
         setIsExamLocked(true);
         void finalizeExamSession('timeout');
       }
@@ -559,7 +561,10 @@ function App() {
     const intervalId = window.setInterval(() => {
       setPerProblemRemaining((prev) => {
         const current = Number(prev[currentProblemId] ?? 0);
-        if (current <= 0) return prev;
+        // allow the timer to go negative so we can detect "expired but still at 00:00"
+        // and only lock/auto-submit once the value is < 0. This keeps 0 as a usable
+        // state for students.
+        if (current < 0) return prev;
 
         const next = { ...prev, [currentProblemId]: current - 1 };
         localStorage.setItem(getTimerStorageKey(exam._id), JSON.stringify(next));
@@ -573,7 +578,7 @@ function App() {
   useEffect(() => {
     if (!isPerProblemTimer || !currentProblemId || isExamLocked) return;
 
-    if ((perProblemRemaining[currentProblemId] ?? 0) <= 0 && !autoSubmitMapRef.current[currentProblemId]) {
+    if ((perProblemRemaining[currentProblemId] ?? 0) < 0 && !autoSubmitMapRef.current[currentProblemId]) {
       autoSubmitMapRef.current[currentProblemId] = true;
       toast.error('Problem timer expired. Auto-submitting current problem.');
       void submitCurrentProblem(undefined, { force: true });

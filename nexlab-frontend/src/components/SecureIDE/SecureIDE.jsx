@@ -64,7 +64,7 @@ function SecureIDE({
   const isSequentialMode = navigationControl === false;
   const currentProblemSubmitted = Boolean(submissions?.[currentProblemId]);
   const centerWidth = 100 - leftWidth - rightWidth;
-  const problemTimerExpired = isPerProblemTimer && Number(perProblemTimeLeft) <= 0;
+  const problemTimerExpired = isPerProblemTimer && Number(perProblemTimeLeft) < 0;
   const effectiveLocked = isLocked || problemTimerExpired;
 
   // Update refs

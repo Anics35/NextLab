@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, X, Share2 } from 'lucide-react';
 import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics, deleteExam } from '../../../services/api';
+import { getAuthToken } from '../../../services/authService';
 import { cardClass } from '../constants';
 import LiveStudentListPanel from './LiveStudentListPanel';
 import StudentListPanel from './StudentListPanel';
 import SubmissionReview from './SubmissionReview';
+import ExamPublishPanel from './ExamPublishPanel';
+import { initSocket, socket } from '../../../services/socket';
 
 const RESULT_BASE_HASH = '#/teacher/results';
 
@@ -78,6 +81,14 @@ function ResultsTab({
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteExam, setPendingDeleteExam] = useState(null);
+  const [showPublishPanel, setShowPublishPanel] = useState(false);
+  const [recentSubmissionEvents, setRecentSubmissionEvents] = useState([]);
+  const [pendingExamAction, setPendingExamAction] = useState(null);
+  const [examStatusOverride, setExamStatusOverride] = useState(null);
+  const [examTimeOverride, setExamTimeOverride] = useState(null);
+  const [isExamActionHovered, setIsExamActionHovered] = useState(false);
+  const [timerNow, setTimerNow] = useState(() => Date.now());
+  const teacherServerOffsetRef = useRef(0);
 
   useEffect(() => {
     if (!window.location.hash.startsWith(RESULT_BASE_HASH)) {
@@ -99,6 +110,14 @@ function ResultsTab({
     }
   }, [route.courseId, route.examId, selectedCourseId, selectedExamId, setSelectedCourseId, setSelectedExamId]);
 
+  useEffect(() => {
+    setExamStatusOverride(null);
+  }, [route.examId]);
+
+  useEffect(() => {
+    setRecentSubmissionEvents([]);
+  }, [route.examId]);
+
   const selectedCourse = useMemo(
     () => courses.find((item) => item._id === (route.courseId || selectedCourseId)) || null,
     [courses, route.courseId, selectedCourseId]
@@ -109,17 +128,82 @@ function ResultsTab({
     [courseExams, route.examId, selectedExamId]
   );
 
+  const displayedExam = useMemo(
+    () => {
+      if (!selectedExam) return null;
+      const base = { ...selectedExam, status: examStatusOverride || selectedExam.status };
+      if (examTimeOverride) {
+        return { ...base, ...examTimeOverride };
+      }
+      return base;
+    },
+    [examStatusOverride, examTimeOverride, selectedExam]
+  );
+
   const isExamLiveWindow = useMemo(() => {
-    if (!selectedExam?.startTime || !selectedExam?.endTime) {
+    if (displayedExam?.status !== 'ongoing') {
       return false;
     }
 
-    const startTime = new Date(selectedExam.startTime).getTime();
-    const endTime = new Date(selectedExam.endTime).getTime();
+    if (!displayedExam?.startTime || !displayedExam?.endTime) {
+      return false;
+    }
+
+    const startTime = new Date(displayedExam.startTime).getTime();
+    const endTime = new Date(displayedExam.endTime).getTime();
     const now = Date.now();
 
     return Number.isFinite(startTime) && Number.isFinite(endTime) && now >= startTime && now <= endTime;
-  }, [selectedExam]);
+  }, [displayedExam]);
+
+  const isExamEnded = displayedExam?.status === 'ended';
+  const isExamRunning = displayedExam?.status === 'ongoing';
+
+  useEffect(() => {
+    if (displayedExam?.serverTime) {
+      teacherServerOffsetRef.current = new Date(displayedExam.serverTime).getTime() - Date.now();
+      return;
+    }
+
+    teacherServerOffsetRef.current = 0;
+  }, [displayedExam?.serverTime]);
+
+  const teacherTimerInfo = useMemo(() => {
+    if (!isExamRunning || !displayedExam?.startTime || !displayedExam?.endTime) {
+      return null;
+    }
+
+    const now = timerNow + (teacherServerOffsetRef.current || 0);
+    const startTime = new Date(displayedExam.startTime).getTime();
+    const endTime = new Date(displayedExam.endTime).getTime();
+
+    if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
+      return null;
+    }
+
+    if (now < startTime) {
+      return { status: 'waiting', label: 'Waiting to start' };
+    }
+
+    const remainingSeconds = Math.max(0, Math.floor((endTime - now) / 1000));
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
+
+    return {
+      status: remainingSeconds <= 300 ? 'critical' : remainingSeconds <= 900 ? 'warning' : 'ongoing',
+      label: `${remainingSeconds} sec`,
+      compactClock: [hours.toString().padStart(2, '0'), minutes.toString().padStart(2, '0'), seconds.toString().padStart(2, '0')].join(':')
+    };
+  }, [displayedExam, isExamRunning, timerNow]);
+
+  useEffect(() => {
+    if (!isExamRunning) return undefined;
+
+    setTimerNow(Date.now());
+    const intervalId = window.setInterval(() => setTimerNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isExamRunning, displayedExam?.startTime, displayedExam?.endTime, displayedExam?.serverTime]);
 
   const loadSubmissions = useCallback(
     async (examId) => {
@@ -165,6 +249,39 @@ function ResultsTab({
     if (route.page !== 'students') return;
     void loadSubmissions(route.examId);
   }, [route.page, route.examId, loadSubmissions]);
+
+  useEffect(() => {
+    if (route.page !== 'students') {
+      return undefined;
+    }
+
+    const activeSocket = socket || initSocket(getAuthToken());
+    const handleSubmissionEvent = (event) => {
+      const eventExamId = String(event?.meta?.examId || event?.examId || '');
+      if (!route.examId || eventExamId !== String(route.examId)) {
+        return;
+      }
+
+      setRecentSubmissionEvents((prev) => [
+        {
+          id: `${eventExamId}-${event?.studentId || event?.meta?.studentId || event?.studentName || 'student'}-${event?.createdAt || event?.time || Date.now()}`,
+          studentName: event?.meta?.studentName || event?.studentName || 'Student',
+          type: event?.type || 'submission',
+          time: event?.createdAt || event?.time || new Date().toISOString(),
+          message: event?.message || 'Submission received'
+        },
+        ...prev
+      ].slice(0, 8));
+
+      void loadSubmissions(route.examId);
+      if (isExamLiveWindow) {
+        void loadAnalytics(route.examId);
+      }
+    };
+
+    activeSocket.on('submission_event', handleSubmissionEvent);
+    return () => activeSocket.off('submission_event', handleSubmissionEvent);
+  }, [route.page, route.examId, loadAnalytics, loadSubmissions, isExamLiveWindow]);
 
   useEffect(() => {
     if (route.page !== 'students' || !route.examId || !isExamLiveWindow) {
@@ -266,6 +383,13 @@ function ResultsTab({
   }, [selectedSubmissionId, submissions, setSelectedSubmission, setActiveProblemIndex]);
 
   useEffect(() => {
+    if (examStatusOverride && selectedExam?.status === examStatusOverride) {
+      setExamStatusOverride(null);
+      setExamTimeOverride(null);
+    }
+  }, [examStatusOverride, selectedExam?.status]);
+
+  useEffect(() => {
     if (!selectedProblem) {
       setTeacherInput('');
       setTeacherOutput('');
@@ -325,35 +449,41 @@ function ResultsTab({
     }
   };
 
-  const handleStartExam = async () => {
+  const runExamAction = async (action) => {
     if (!route.examId || !selectedExam) return;
 
     setIsFinalizingMarks(true);
     try {
-      await updateExam(route.examId, { status: 'ongoing' });
-      toast.success('Exam started.');
+      if (action === 'start') {
+        // Immediately reflect the exam as started in the UI and set a startTime
+        // override to the current time so the timer begins without waiting for
+        // the server round-trip.
+        const nowIso = new Date().toISOString();
+        setExamStatusOverride('ongoing');
+        setExamTimeOverride({ startTime: nowIso, endTime: selectedExam.endTime });
+        await updateExam(route.examId, { status: 'ongoing' });
+        // server response will update selectedExam via onRefreshCourseExams
+        // and the effect above will clear the overrides when synced.
+        toast.success('Exam started.');
+      } else if (action === 'stop') {
+        // Immediately reflect the exam as ended in the UI and set endTime override
+        const nowIso = new Date().toISOString();
+        setExamStatusOverride('ended');
+        setExamTimeOverride({ endTime: nowIso });
+        await updateExam(route.examId, { status: 'ended' });
+        toast.success('Exam ended.');
+      }
       await onRefreshCourseExams?.();
     } catch (error) {
-      toast.error(error.message || 'Unable to start exam.');
+      toast.error(error.message || `Unable to ${action} exam.`);
     } finally {
       setIsFinalizingMarks(false);
     }
   };
 
-  const handleStopExam = async () => {
-    if (!route.examId || !selectedExam) return;
+  const handleStartExam = () => setPendingExamAction('start');
 
-    setIsFinalizingMarks(true);
-    try {
-      await updateExam(route.examId, { status: 'ended' });
-      toast.success('Exam stopped.');
-      await onRefreshCourseExams?.();
-    } catch (error) {
-      toast.error(error.message || 'Unable to stop exam.');
-    } finally {
-      setIsFinalizingMarks(false);
-    }
-  };
+  const handleStopExam = () => setPendingExamAction('stop');
 
   const handleOverrideScore = async (submissionId, problemId) => {
     const draftKey = `${submissionId}_${problemId}`;
@@ -485,17 +615,39 @@ function ResultsTab({
               <p className="mt-1 text-sm text-gray-400">{selectedCourse?.title || 'Selected course'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {selectedExam?.status === 'ongoing' ? (
+              {isExamRunning ? (
+                <div
+                  className="relative"
+                  onMouseEnter={() => setIsExamActionHovered(true)}
+                  onMouseLeave={() => setIsExamActionHovered(false)}
+                >
+                  {isExamActionHovered ? (
+                    <button
+                      type="button"
+                      onClick={handleStopExam}
+                      disabled={isFinalizingMarks || !route.examId}
+                      className="inline-flex min-w-[120px] items-center justify-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
+                      Stop Exam
+                    </button>
+                  ) : (
+                    <div className="inline-flex min-w-[120px] items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
+                      <span className="uppercase tracking-[0.22em] text-[10px] text-red-300/80">Timer</span>
+                      <span className="tabular-nums">{teacherTimerInfo?.label || '-- sec'}</span>
+                      {teacherTimerInfo?.compactClock ? <span className="text-xs text-red-200/70">{teacherTimerInfo.compactClock}</span> : null}
+                    </div>
+                  )}
+                </div>
+              ) : isExamEnded ? (
                 <button
                   type="button"
-                  onClick={handleStopExam}
-                  disabled={isFinalizingMarks || !route.examId}
-                  className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                  disabled
+                  className="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-white opacity-60"
                 >
-                  {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
-                  Stop Exam
+                  Exam Ended
                 </button>
-              ) : selectedExam?.status === 'published' ? (
+              ) : (
                 <button
                   type="button"
                   onClick={handleStartExam}
@@ -504,14 +656,6 @@ function ResultsTab({
                 >
                   {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
                   Start Exam
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-white opacity-60"
-                >
-                  Exam Ended
                 </button>
               )}
               <button
@@ -534,6 +678,15 @@ function ResultsTab({
                 {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                 {isFinalizingMarks ? 'Saving...' : 'Finalize Marks'}
               </button>
+              <button
+                type="button"
+                onClick={() => setShowPublishPanel(true)}
+                disabled={!route.examId}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                <Share2 size={14} />
+                Publish
+              </button>
             </div>
           </div>
 
@@ -550,7 +703,12 @@ function ResultsTab({
               }}
             />
 
-            <LiveStudentListPanel liveStudents={liveStudents} loading={analyticsLoading} isExamLiveWindow={isExamLiveWindow} />
+            <LiveStudentListPanel
+              liveStudents={liveStudents}
+              recentSubmissionEvents={recentSubmissionEvents}
+              loading={analyticsLoading}
+              isExamLiveWindow={isExamLiveWindow}
+            />
 
             <SubmissionReview
               selectedStudent={selectedStudent}
@@ -609,6 +767,54 @@ function ResultsTab({
                       toast.error(err.message || 'Unable to delete exam.');
                     }
                   }} className="rounded-md border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30">Yes</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {showPublishPanel && route.examId ? (
+            <ExamPublishPanel
+              examId={route.examId}
+              onClose={() => setShowPublishPanel(false)}
+              onSuccess={() => {
+                void loadSubmissions(route.examId);
+              }}
+            />
+          ) : null}
+
+          {pendingExamAction ? (
+            <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
+              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f0f0f] p-5 shadow-2xl shadow-black/40">
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Confirm action</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">
+                  {pendingExamAction === 'start' ? 'Start this exam?' : 'Stop this exam?'}
+                </h3>
+                <p className="mt-3 text-sm text-gray-400">
+                  {pendingExamAction === 'start'
+                    ? 'Do you really need to start the exam now? Students will be able to begin once it is running.'
+                    : 'Do you really need to stop the exam now? This will end the session immediately for students.'}
+                </p>
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPendingExamAction(null)}
+                    className="rounded-md border border-gray-700 bg-transparent px-4 py-2 text-sm text-gray-300 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const action = pendingExamAction;
+                      setPendingExamAction(null);
+                      await runExamAction(action);
+                    }}
+                    className={`rounded-md px-4 py-2 text-sm font-semibold text-black ${
+                      pendingExamAction === 'start' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-red-500 hover:bg-red-400'
+                    }`}
+                  >
+                    {pendingExamAction === 'start' ? 'Yes, start exam' : 'Yes, stop exam'}
+                  </button>
                 </div>
               </div>
             </div>

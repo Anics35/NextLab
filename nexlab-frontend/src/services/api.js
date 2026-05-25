@@ -138,4 +138,16 @@ export const updateProfile = (payload) =>
     'Unable to update profile.'
   );
 
+export const getEnrolledStudents = (examId) =>
+  request(
+    api.get(`/exam/${examId}/enrolled-students`),
+    'Unable to load enrolled students.'
+  );
+
+export const updateExamVisibility = (examId, visibleToStudents) =>
+  request(
+    api.put(`/exam/${examId}/update-visibility`, { visibleToStudents }),
+    'Unable to update exam visibility.'
+  );
+
 export default api;
