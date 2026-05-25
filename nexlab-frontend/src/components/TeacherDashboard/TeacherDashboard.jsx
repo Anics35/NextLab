@@ -374,9 +374,22 @@ function TeacherDashboard() {
           selectedProblemMap={selectedProblemMap}
           setSelectedProblemMap={setSelectedProblemMap}
           onPublish={async (payload) => {
-            await createExam(payload);
-            await loadCourseExams(examForm.courseId);
+            const response = await createExam(payload);
+            const createdExamId = response?.exam?._id || '';
+            const createdCourseId = payload?.courseId || examForm.courseId;
+
+            setSelectedCourseId(createdCourseId);
+            await loadCourseExams(createdCourseId);
+            if (createdExamId) {
+              setSelectedExamId(createdExamId);
+            }
             handleSelectTab('results');
+
+            if (createdCourseId && createdExamId) {
+              window.location.hash = `#/teacher/results/course/${encodeURIComponent(createdCourseId)}/exam/${encodeURIComponent(createdExamId)}`;
+            } else if (createdCourseId) {
+              window.location.hash = `#/teacher/results/course/${encodeURIComponent(createdCourseId)}`;
+            }
           }}
         />
       )}
