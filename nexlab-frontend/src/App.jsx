@@ -429,7 +429,9 @@ function App() {
 
       const response = await finalizeExamAttempt(examId);
       setAttempt(response.attempt || null);
-      toast[trigger === 'timeout' ? 'error' : 'success'](trigger === 'timeout' ? 'Time is over. Exam submitted automatically.' : 'Exam submitted successfully.');
+      if (trigger !== 'timeout') {
+        toast.success('Exam submitted successfully.');
+      }
 
       if (trigger === 'manual' || trigger === 'timeout') {
         returnToDashboard();
