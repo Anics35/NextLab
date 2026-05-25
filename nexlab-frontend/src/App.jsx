@@ -460,7 +460,10 @@ function App() {
   }, [returnToDashboard]);
 
   const submitCurrentProblem = async (editorCode, { force = false } = {}) => {
-    if (!examId || !currentProblemId || isExamLocked || isSubmitting) return;
+    if (!examId || !currentProblemId || isSubmitting) {
+      console.log(`[submitCurrentProblem] Early return: examId=${!!examId}, currentProblemId=${!!currentProblemId}, isSubmitting=${isSubmitting}, isExamLocked=${isExamLocked}`);
+      return;
+    }
     const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
 
     if (!sourceCode.trim() && !force) {
@@ -468,6 +471,7 @@ function App() {
       return;
     }
 
+    console.log(`[submitCurrentProblem] Submitting: problemId=${currentProblemId}, force=${force}, codeLength=${sourceCode.length}`);
     setIsSubmitting(true);
     try {
       console.log('FINAL CODE:', sourceCode);
@@ -502,6 +506,7 @@ function App() {
         setCurrentProblemIndex(Math.min(nextAttempt?.currentProblemIndex ?? currentProblemIndex + 1, problems.length - 1));
       }
     } catch (error) {
+      console.error('[submitCurrentProblem] Error:', error);
       toast.error(error.message || 'Submission failed.');
     } finally {
       setIsSubmitting(false);
@@ -576,14 +581,27 @@ function App() {
   }, [currentProblemId, exam?._id, isExamLocked, isPerProblemTimer]);
 
   useEffect(() => {
-    if (!isPerProblemTimer || !currentProblemId || isExamLocked) return;
+    if (!isPerProblemTimer || !currentProblemId || !examId) return;
 
-    if ((perProblemRemaining[currentProblemId] ?? 0) < 0 && !autoSubmitMapRef.current[currentProblemId]) {
+    const timeLeft = perProblemRemaining[currentProblemId] ?? 0;
+    const ranCode = lastRunCodeMap[currentProblemId];
+    const notYetSubmitted = !submissions[currentProblemId];
+    const alreadyAutoSubmitted = autoSubmitMapRef.current[currentProblemId];
+
+    console.log(`[AutoSubmit] Problem ${currentProblemId}: timeLeft=${timeLeft}, ranCode=${!!ranCode}, notYetSubmitted=${notYetSubmitted}, alreadySubmitted=${alreadyAutoSubmitted}, isSubmitting=${isSubmitting}`);
+
+    // Auto-submit when timer reaches 00:00 if student ran the code but didn't explicitly submit
+    // Do NOT return early on isExamLocked - we want to auto-submit even if exam is ending
+    if (timeLeft <= 0 && ranCode && notYetSubmitted && !alreadyAutoSubmitted && !isSubmitting) {
+      console.log(`[AutoSubmit] Triggering auto-submit for problem ${currentProblemId}`);
       autoSubmitMapRef.current[currentProblemId] = true;
-      toast.error('Problem timer expired. Auto-submitting current problem.');
-      void submitCurrentProblem(undefined, { force: true });
+      toast.error('Time is up. Auto-submitting your attempt.');
+      void submitCurrentProblem(ranCode, { force: true }).catch((err) => {
+        console.error('[AutoSubmit] Failed:', err);
+        delete autoSubmitMapRef.current[currentProblemId];
+      });
     }
-  }, [currentProblemId, isExamLocked, isPerProblemTimer, perProblemRemaining, submitCurrentProblem]);
+  }, [currentProblemId, examId, isPerProblemTimer, lastRunCodeMap, perProblemRemaining, submissions, isSubmitting, submitCurrentProblem]);
 
   // Auto-finalize exam when all problems are submitted
   useEffect(() => {

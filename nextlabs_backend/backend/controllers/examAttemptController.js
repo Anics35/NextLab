@@ -69,6 +69,7 @@ async function loadExamForStudent(examId, studentId) {
 
 function assertExamOpen(exam) {
   const now = new Date();
+  const GRACE_PERIOD_MS = 10000; // 10 seconds grace period for auto-submissions
 
   if (exam.status === "ended") {
     throw createApiError(403, "Exam time is over", "EXAM_ENDED");
@@ -78,7 +79,8 @@ function assertExamOpen(exam) {
     throw createApiError(403, "Exam has not started yet", "EXAM_NOT_STARTED");
   }
 
-  if (now > exam.endTime) {
+  // Allow submissions up to 10 seconds after the exam officially ends (grace period for auto-submissions)
+  if (now > new Date(exam.endTime).getTime() + GRACE_PERIOD_MS) {
     throw createApiError(403, "Exam time is over", "EXAM_ENDED");
   }
 }
