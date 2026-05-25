@@ -45,6 +45,9 @@ export const getCourseById = (courseId) =>
 export const updateCourse = (courseId, payload) =>
   request(api.put(`/course/${courseId}`, payload), 'Unable to update course.');
 
+export const deleteCourse = (courseId) =>
+  request(api.delete(`/course/${courseId}`), 'Unable to delete course.');
+
 export const getCourseExams = (courseId) =>
   request(api.get(`/exam/course/${courseId}`), 'Unable to load course exams.');
 

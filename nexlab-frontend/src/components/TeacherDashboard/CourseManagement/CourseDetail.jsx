@@ -9,8 +9,10 @@ function CourseDetail({
   courseEditForm,
   setCourseEditForm,
   onSave,
+  onDelete,
   onClose,
-  isSaving
+  isSaving,
+  isDeleting
 }) {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
@@ -23,6 +25,14 @@ function CourseDetail({
           <p className="text-sm text-gray-400">View enrolled students and edit course details.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-500 disabled:opacity-50"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete Course'}
+          </button>
           <button
             type="button"
             onClick={onClose}

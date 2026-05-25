@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { getAuthToken, getStoredUser, logout } from '../../services/authService';
-import { getMyCourses, getCourseExams, getCourseById, createExam } from '../../services/api';
+import { getMyCourses, getCourseExams, getCourseById, createExam, deleteCourse, updateCourse } from '../../services/api';
 import { getProblems } from '../../services/codeService';
 import { initSocket, socket } from '../../services/socket';
 import AppLayout from '../layout/AppLayout';
@@ -45,6 +45,7 @@ function TeacherDashboard() {
   const [isEditingCourse, setIsEditingCourse] = useState(false);
   const [courseEditForm, setCourseEditForm] = useState(DEFAULT_COURSE_FORM);
   const [isSavingCourse, setIsSavingCourse] = useState(false);
+  const [isDeletingCourse, setIsDeletingCourse] = useState(false);
 
   // Problems
   const [problems, setProblems] = useState([]);
@@ -136,8 +137,10 @@ function TeacherDashboard() {
       const nextCourse = getResultHashValue('course') || nextCourses[0]?._id || '';
       setSelectedCourseId((prev) => prev || nextCourse);
       setExamForm((prev) => ({ ...prev, courseId: prev.courseId || nextCourse }));
+      return nextCourses;
     } catch (error) {
       toast.error(error.message || 'Unable to load workspace.');
+      return [];
     } finally {
       setCoursesLoading(false);
     }
@@ -165,6 +168,7 @@ function TeacherDashboard() {
     if (!courseId) {
       setSelectedCourseDetail(null);
       setIsEditingCourse(false);
+      setIsDeletingCourse(false);
       return;
     }
 
@@ -222,6 +226,7 @@ function TeacherDashboard() {
   const closeCourseDetail = () => {
     setSelectedCourseDetail(null);
     setIsEditingCourse(false);
+    setIsDeletingCourse(false);
   };
 
   const sidebar = (
@@ -264,7 +269,6 @@ function TeacherDashboard() {
             courseEditForm={courseEditForm}
             setCourseEditForm={setCourseEditForm}
             onSave={async () => {
-              const { updateCourse } = await import('../../services/api');
               setIsSavingCourse(true);
               try {
                 const response = await updateCourse(selectedCourseDetail._id, {
@@ -296,8 +300,38 @@ function TeacherDashboard() {
                 setIsSavingCourse(false);
               }
             }}
+            onDelete={async () => {
+              if (!selectedCourseDetail?._id) {
+                return;
+              }
+
+              const confirmed = window.confirm(
+                `Delete ${selectedCourseDetail.title || 'this course'}? This will also remove related exams and submissions.`
+              );
+              if (!confirmed) {
+                return;
+              }
+
+              setIsDeletingCourse(true);
+              try {
+                await deleteCourse(selectedCourseDetail._id);
+                setExamForm((prev) => ({ ...prev, courseId: '' }));
+                const nextCourses = await loadWorkspace();
+                const remainingCourses = Array.isArray(nextCourses) ? nextCourses : [];
+                const nextSelectedCourseId = remainingCourses[0]?._id || '';
+                setSelectedCourseId(nextSelectedCourseId);
+                setSelectedCourseDetail(null);
+                setCourseEditForm(DEFAULT_COURSE_FORM);
+                toast.success('Course deleted.');
+              } catch (error) {
+                toast.error(error.message || 'Unable to delete course.');
+              } finally {
+                setIsDeletingCourse(false);
+              }
+            }}
             onClose={closeCourseDetail}
             isSaving={isSavingCourse}
+            isDeleting={isDeletingCourse}
           />
         ) : (
           <CoursesTab

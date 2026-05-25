@@ -1,5 +1,8 @@
 const crypto = require("crypto");
 const Course = require("../models/Course");
+const Exam = require("../models/Exam");
+const ExamAttempt = require("../models/ExamAttempt");
+const Submission = require("../models/Submission");
 const { createApiError } = require("../utils/apiError");
 const { isBlank, isValidObjectId } = require("../utils/validators");
 
@@ -207,4 +210,38 @@ async function updateCourse(req, res, next) {
   }
 }
 
-module.exports = { createCourse, getCourse, joinCourse, listMyCourses, updateCourse };
+async function deleteCourse(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      throw createApiError(400, "Course id must be a valid MongoDB ObjectId", "INVALID_COURSE_ID");
+    }
+
+    const course = await Course.findById(id);
+    if (!course) {
+      throw createApiError(404, "Course not found", "COURSE_NOT_FOUND");
+    }
+
+    if (String(course.teacherId) !== req.user.id) {
+      throw createApiError(403, "Only the course teacher can delete this course", "FORBIDDEN");
+    }
+
+    const exams = await Exam.find({ courseId: course._id }).select("_id");
+    const examIds = exams.map((exam) => exam._id);
+
+    if (examIds.length > 0) {
+      await ExamAttempt.deleteMany({ examId: { $in: examIds } });
+      await Submission.deleteMany({ examId: { $in: examIds } });
+      await Exam.deleteMany({ _id: { $in: examIds } });
+    }
+
+    await Course.findByIdAndDelete(course._id);
+
+    res.json({ success: true, message: "Course deleted" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createCourse, getCourse, joinCourse, listMyCourses, updateCourse, deleteCourse };
