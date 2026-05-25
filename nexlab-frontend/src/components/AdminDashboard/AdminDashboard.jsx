@@ -25,17 +25,14 @@ import { logout } from '../../services/authService';
 const tabs = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'courses', label: 'Courses', icon: BookOpen },
-  { id: 'exams', label: 'Exams', icon: FileText },
-  { id: 'monitoring', label: 'Monitoring', icon: Activity }
+  { id: 'exams', label: 'Exams', icon: FileText }
 ];
 
+// Only show the primary top-level stats the user requested
 const statLabels = {
   users: 'Users',
   courses: 'Courses',
-  exams: 'Exams',
-  attempts: 'Attempts',
-  submissions: 'Submissions',
-  warnings: 'Warnings'
+  exams: 'Exams'
 };
 
 function StatusBadge({ active, activeText, inactiveText }) {
@@ -241,12 +238,9 @@ function AdminDashboard() {
               <p className="mt-1 text-xs text-white/50">{user.rollNumber ? `Roll ${user.rollNumber}` : roleLabel} {user.semester ? `- Semester ${user.semester}` : ''}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge active={user.disabled} activeText="Disabled" inactiveText="Active" />
-              <button type="button" onClick={() => handleViewActivity(user)} className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/20">
+              {/* No active/disabled badge shown per user request; only Activity and Delete */}
+              <button type="button" onClick={() => handleViewActivity(user)} className="inline-flex items-center gap-1 rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/20">
                 <Activity size={14} />Activity
-              </button>
-              <button type="button" onClick={() => handleDisableUser(user)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 hover:bg-amber-500/20">
-                <UserX size={14} />{user.disabled ? 'Enable' : 'Disable'}
               </button>
               <button type="button" onClick={() => handleDeleteUser(user)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200 hover:bg-red-500/20">
                 <Trash2 size={14} />Delete
@@ -258,6 +252,30 @@ function AdminDashboard() {
       {items.length === 0 && <p className="text-sm text-white/50">No {roleLabel.toLowerCase()} accounts found.</p>}
     </div>
   );
+
+  // derive unique years and semesters for filters
+  const years = Array.from(new Set(courses.map((c) => c.year).filter(Boolean))).sort((a, b) => a - b);
+  const semestersForYear = (year) => Array.from(new Set(courses.filter((c) => c.year === year).map((c) => c.semester).filter(Boolean))).sort((a, b) => a - b);
+
+  // filter state
+  const [filterYear, setFilterYear] = useState(years.length ? years[0] : '');
+  const [filterSemester, setFilterSemester] = useState('');
+
+  // update semester options when year changes
+  useEffect(() => {
+    if (!filterYear) {
+      setFilterSemester('');
+      return;
+    }
+    const semList = semestersForYear(filterYear);
+    setFilterSemester(semList.length ? semList[0] : '');
+  }, [filterYear]);
+
+  const filteredCourses = courses.filter((c) => {
+    if (filterYear && String(c.year) !== String(filterYear)) return false;
+    if (filterSemester && String(c.semester) !== String(filterSemester)) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100">
@@ -341,7 +359,20 @@ function AdminDashboard() {
 
           {activeTab === 'courses' && (
             <div className="grid gap-3">
-              {courses.map((course) => (
+              <div className="flex items-center gap-3 mb-3">
+                <label className="text-sm text-white/60">Year:</label>
+                <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="rounded-md bg-[#0b0b0b] border border-white/10 px-3 py-2 text-sm text-white/80">
+                  <option value="">All</option>
+                  {years.map((y) => (<option key={y} value={y}>{y}</option>))}
+                </select>
+                <label className="text-sm text-white/60">Semester:</label>
+                <select value={filterSemester} onChange={(e) => setFilterSemester(e.target.value)} className="rounded-md bg-[#0b0b0b] border border-white/10 px-3 py-2 text-sm text-white/80">
+                  <option value="">All</option>
+                  {filterYear ? semestersForYear(filterYear).map((s) => (<option key={s} value={s}>{s}</option>)) : null}
+                </select>
+              </div>
+
+              {filteredCourses.map((course) => (
                 <article key={course._id} className="rounded-lg border border-white/10 bg-[#101010] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -373,7 +404,7 @@ function AdminDashboard() {
               <section className="space-y-3">
                 <h2 className="text-lg font-semibold">Courses</h2>
                 <div className="grid gap-2">
-                  {courses.map((course) => {
+                  {filteredCourses.map((course) => {
                     const active = selectedExamCourse?._id === course._id;
                     const count = exams.filter((exam) => String(exam.courseId?._id || exam.courseId) === String(course._id)).length;
                     return (
@@ -500,28 +531,32 @@ function AdminDashboard() {
               </div>
               <button type="button" onClick={() => setSelectedActivity(null)} className="rounded-md border border-white/10 px-3 py-1 text-sm text-white/70 hover:bg-white/10">Close</button>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            {/* Show exams for teacher or student's exam attempts */}
+            <div className="grid gap-3 md:grid-cols-1">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <p className="text-xs text-white/50">Events</p>
-                <p className="text-xl font-semibold">{selectedActivity.activity?.events?.length || 0}</p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <p className="text-xs text-white/50">Attempts</p>
-                <p className="text-xl font-semibold">{selectedActivity.activity?.attempts?.length || 0}</p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <p className="text-xs text-white/50">Submissions</p>
-                <p className="text-xl font-semibold">{selectedActivity.activity?.submissions?.length || 0}</p>
+                <p className="text-xs text-white/50">Exams</p>
+                <p className="text-xl font-semibold">{(selectedActivity.exams || selectedActivity.activity?.attempts || []).length || 0}</p>
               </div>
             </div>
+
             <div className="mt-4 space-y-2">
-              {(selectedActivity.activity?.events || []).map((event) => (
-                <div key={event._id} className="rounded-lg border border-white/10 bg-[#101010] p-3 text-sm">
-                  <p className="font-medium text-white">{event.type}</p>
-                  <p className="text-xs text-white/60">{event.severity} - {new Date(event.createdAt).toLocaleString()}</p>
+              {selectedActivity.exams ? (
+                // teacher: list exams conducted by teacher
+                selectedActivity.exams.map((exam) => (
+                  <div key={exam._id} className="rounded-lg border border-white/10 bg-[#101010] p-3 text-sm">
+                    <p className="font-medium text-white">{exam.title}</p>
+                    <p className="text-xs text-white/60">{exam.courseId?.title || exam.courseId || ''} - {exam.startTime ? new Date(exam.startTime).toLocaleString() : ''}</p>
+                  </div>
+                ))
+              ) : (selectedActivity.activity?.attempts || []).map((attempt) => (
+                // student: list attempts/exams given
+                <div key={attempt._id || attempt.examId} className="rounded-lg border border-white/10 bg-[#101010] p-3 text-sm">
+                  <p className="font-medium text-white">{attempt.examId?.title || attempt.title || attempt.exam || 'Exam'}</p>
+                  <p className="text-xs text-white/60">Taken: {attempt.startedAt ? new Date(attempt.startedAt).toLocaleString() : (attempt.createdAt ? new Date(attempt.createdAt).toLocaleString() : '')}</p>
                 </div>
               ))}
-              {(selectedActivity.activity?.events || []).length === 0 && <p className="text-sm text-white/50">No activity records found.</p>}
+
+              {(!selectedActivity.exams && !(selectedActivity.activity?.attempts || []).length) && <p className="text-sm text-white/50">No exams found for this account.</p>}
             </div>
           </div>
         </div>

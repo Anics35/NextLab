@@ -96,7 +96,7 @@ function App() {
   const [perProblemRemaining, setPerProblemRemaining] = useState({});
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingExam, setIsLoadingExam] = useState(false);
+  const [loadingExamId, setLoadingExamId] = useState(null);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [isExamLocked, setIsExamLocked] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -281,7 +281,7 @@ function App() {
 
   const loadExamSession = useCallback(async (examId, { reviewMode = false } = {}) => {
     if (!examId) return;
-    setIsLoadingExam(true);
+    setLoadingExamId(examId);
     autoFinalizeRef.current = false;
 
     try {
@@ -327,7 +327,7 @@ function App() {
     } catch (error) {
       toast.error(error.message || (reviewMode ? 'Unable to open exam results.' : 'Unable to start exam.'));
     } finally {
-      setIsLoadingExam(false);
+      setLoadingExamId(null);
     }
   }, []);
 
@@ -784,10 +784,10 @@ function App() {
                     <button
                       type="button"
                       onClick={() => (item.runtimeState === 'ongoing' ? startSelectedExam(item._id) : reviewReady ? openExamResults(item._id) : null)}
-                      disabled={isLoadingExam || (item.runtimeState !== 'ongoing' && !reviewReady)}
+                      disabled={loadingExamId !== null && loadingExamId !== item._id || (item.runtimeState !== 'ongoing' && !reviewReady)}
                       className="mt-3 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
                     >
-                      {isLoadingExam ? 'Loading...' : buttonLabel}
+                      {loadingExamId === item._id ? 'Loading...' : buttonLabel}
                     </button>
                   </article>
                   );
