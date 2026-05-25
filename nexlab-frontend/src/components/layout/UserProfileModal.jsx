@@ -5,6 +5,7 @@ import { X, Edit2, Save, AlertCircle, LoaderCircle } from 'lucide-react';
 function UserProfileModal({ user, onClose, onProfileUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -61,6 +62,11 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleConfirmSave = async () => {
+    setShowSaveConfirm(false);
+    await handleSave();
   };
 
   const handleCancel = () => {
@@ -220,7 +226,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSave}
+                  onClick={() => setShowSaveConfirm(true)}
                   disabled={isSaving}
                   className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
@@ -232,6 +238,36 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
           </div>
         </div>
       </div>
+
+      {showSaveConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+            <div className="border-b border-white/10 px-5 py-4">
+              <h4 className="text-base font-semibold text-white">Save changes?</h4>
+              <p className="mt-1 text-sm text-white/55">Do you want to update your profile information?</p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowSaveConfirm(false)}
+                disabled={isSaving}
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSave}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {isSaving ? <LoaderCircle size={14} className="animate-spin" /> : null}
+                Yes, Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
