@@ -7,6 +7,48 @@ const { evaluateExamAnswer, recalculateAttemptScore } = require("../services/exa
 const { createApiError } = require("../utils/apiError");
 const { isBlank, isValidObjectId } = require("../utils/validators");
 
+function canStudentViewScores(exam) {
+  return Boolean(
+    exam?.marksFinalized === true &&
+    (
+      exam?.showResultsImmediately === true ||
+      exam?.resultVisibility === "immediate" ||
+      exam?.resultsVisible === true
+    )
+  );
+}
+
+function sanitizeAnswerForStudent(answer, exam) {
+  if (!answer) {
+    return answer;
+  }
+
+  const exposeScores = canStudentViewScores(exam);
+  const payload = answer.toObject ? answer.toObject() : { ...answer };
+
+  if (!exposeScores) {
+    delete payload.score;
+    delete payload.finalScore;
+  }
+
+  return payload;
+}
+
+function sanitizeAttemptForStudent(attempt, exam) {
+  if (!attempt) {
+    return attempt;
+  }
+
+  const payload = attempt.toObject ? attempt.toObject() : { ...attempt };
+  payload.answers = (payload.answers || []).map((answer) => sanitizeAnswerForStudent(answer, exam));
+
+  if (!canStudentViewScores(exam)) {
+    delete payload.totalScore;
+  }
+
+  return payload;
+}
+
 async function loadExamForStudent(examId, studentId) {
   if (!isValidObjectId(examId)) {
     throw createApiError(400, "examId must be a valid MongoDB ObjectId", "INVALID_EXAM_ID");
@@ -110,7 +152,7 @@ async function startAttempt(req, res, next) {
 
     res.status(201).json({
       success: true,
-      attempt,
+      attempt: sanitizeAttemptForStudent(attempt, exam),
       exam,
       serverTime: new Date().toISOString(),
       remainingTime: getRemainingTimeSeconds(exam)
@@ -165,7 +207,7 @@ async function saveAttempt(req, res, next) {
 
     res.json({
       success: true,
-      attempt,
+      attempt: sanitizeAttemptForStudent(attempt, exam),
       serverTime: new Date().toISOString(),
       remainingTime: getRemainingTimeSeconds(exam)
     });
@@ -236,9 +278,10 @@ async function submitAttempt(req, res, next) {
     recalculateAttemptScore(attempt);
     await attempt.save();
 
+    const exposeScores = canStudentViewScores(exam);
     res.json({
       success: true,
-      attempt,
+      attempt: sanitizeAttemptForStudent(attempt, exam),
       submissionId: submission._id,
       ...evaluation,
       input: String(input || ""),
@@ -252,8 +295,8 @@ async function submitAttempt(req, res, next) {
         isPublic: detail.visibility === "public",
         error: String(detail.error || "")
       })),
-      score: answer.score,
-      finalScore: answer.finalScore,
+      score: exposeScores ? answer.score : undefined,
+      finalScore: exposeScores ? answer.finalScore : undefined,
       serverTime: new Date().toISOString(),
       remainingTime: getRemainingTimeSeconds(exam)
     });
@@ -278,7 +321,7 @@ async function finalizeAttempt(req, res, next) {
       await attempt.save();
     }
 
-    res.json({ success: true, attempt, serverTime: new Date().toISOString(), remainingTime: 0 });
+    res.json({ success: true, attempt: sanitizeAttemptForStudent(attempt, await Exam.findById(examId)), serverTime: new Date().toISOString(), remainingTime: 0 });
   } catch (error) {
     next(error);
   }
@@ -290,7 +333,7 @@ async function getMyAttempt(req, res, next) {
     const exam = await Exam.findById(req.params.examId);
     res.json({
       success: true,
-      attempt,
+      attempt: sanitizeAttemptForStudent(attempt, exam),
       serverTime: new Date().toISOString(),
       remainingTime: exam ? getRemainingTimeSeconds(exam) : 0
     });

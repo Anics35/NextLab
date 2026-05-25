@@ -623,29 +623,58 @@ function App() {
           </div>
 
           {showResultPanel ? (
-            <div className="flex-1 overflow-y-auto bg-[#0a0a0a] p-4">
-              {canShowResults ? (
-                <div className="space-y-3">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Total Score: <span className="font-semibold">{attempt?.totalScore ?? 0}</span></div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Problems Evaluated: <span className="font-semibold">{attempt?.answers?.length || 0}</span></div>
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {problems.map((problem, idx) => {
-                      const problemId = getProblemId(problem);
-                      const answer = (attempt?.answers || []).find((item) => String(item.problemId) === String(problemId));
-                      return (
-                        <div key={problemId || idx} className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
-                          <div className="font-medium text-white">Problem {idx + 1}</div>
-                          <div className="mt-1 text-white/70">Marks: <span className="font-semibold text-white">{answer ? (answer.finalScore ?? answer.score ?? 0) : 0} / {answer?.marks ?? problem?.marks ?? 0}</span></div>
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="flex-1 overflow-y-auto bg-[#0a0a0a] p-4 space-y-3">
+              {!canShowResults && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">
+                  Marks are hidden until your teacher finalizes and publishes results. You can see test case details below.
                 </div>
-              ) : (
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">Results are hidden until your teacher finalizes and publishes marks.</div>
               )}
+              {canShowResults && (
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Total Score: <span className="font-semibold">{attempt?.totalScore ?? 0}</span></div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">Problems Evaluated: <span className="font-semibold">{attempt?.answers?.length || 0}</span></div>
+                </div>
+              )}
+              <div className="space-y-3">
+                {problems.map((problem, idx) => {
+                  const problemId = getProblemId(problem);
+                  const answer = (attempt?.answers || []).find((item) => String(item.problemId) === String(problemId));
+                  return (
+                    <div key={problemId || idx} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div className="font-medium text-white text-sm">Problem {idx + 1}: {problem?.title || `Untitled`}</div>
+                      {canShowResults && (
+                        <div className="mt-1 text-sm text-white/70">Marks: <span className="font-semibold text-white">{answer ? (answer.finalScore ?? answer.score ?? 0) : 0} / {answer?.marks ?? problem?.marks ?? 0}</span></div>
+                      )}
+                      {answer && (
+                        <div className="mt-2 text-xs space-y-1">
+                          <div className="text-white/60">Test Results: {answer.passed || 0}/{answer.total || 0} passed</div>
+                          {answer.details && Array.isArray(answer.details) && answer.details.length > 0 && (
+                            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                              {answer.details.map((detail, testIdx) => (
+                                <div
+                                  key={`${testIdx}-${detail.input || ''}`}
+                                  className={`rounded p-1.5 text-xs ${
+                                    detail.passed
+                                      ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                      : 'border border-red-500/30 bg-red-500/10 text-red-300'
+                                  }`}
+                                >
+                                  <div className="font-semibold">
+                                    Test {testIdx + 1} {(detail.isPublic ?? detail.visibility === 'public') ? '(Public)' : '(Hidden)'}: {detail.passed ? '✓ Pass' : '✗ Fail'}
+                                  </div>
+                                  {!detail.passed && detail.input && (
+                                    <div className="mt-0.5 text-white/70">Input: <span className="text-white/50 whitespace-pre-wrap wrap-break-word">{detail.input.slice(0, 50)}{detail.input.length > 50 ? '...' : ''}</span></div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="flex-1 min-h-0">

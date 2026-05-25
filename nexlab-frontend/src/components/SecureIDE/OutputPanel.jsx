@@ -77,20 +77,56 @@ function OutputPanel({ input, setInput, output, result, effectiveLocked, isSubmi
           </pre>
         )}
         {result && !isDesignProblem ? (
-          <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">
-            <div>
-              Total {result.passed || 0}/{result.total || 0} · Public {result.passedPublic || 0}/{result.totalPublic || 0} ·
-              Hidden {result.passedHidden || 0}/{result.totalHidden || 0} · Score {result.score ?? 0}
+          <div className="mt-3 space-y-2">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">
+              <div className="font-semibold">Test Results</div>
+              <div className="mt-1">
+                Passed {result.passed || 0}/{result.total || 0} · Public {result.passedPublic || 0}/{result.totalPublic || 0} ·
+                Hidden {result.passedHidden || 0}/{result.totalHidden || 0}
+              </div>
             </div>
-            {Array.isArray(result.details) && result.details.length > 0 ? (
-              <div className="mt-2 space-y-1">
+            {Array.isArray(result.details) && result.details.length > 0 && (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
                 {result.details.map((detail, index) => (
-                  <div key={`${detail.input || ''}-${index}`} className={detail.passed ? 'text-emerald-300' : 'text-red-300'}>
-                    Test {index + 1} {(detail.isPublic ?? detail.visibility === 'public') ? '(Public)' : '(Hidden)'}: {detail.passed ? 'Pass' : 'Fail'}
+                  <div 
+                    key={`${detail.input || ''}-${index}`} 
+                    className={`rounded-lg border p-2 text-xs ${
+                      detail.passed 
+                        ? 'border-emerald-500/30 bg-emerald-500/10' 
+                        : 'border-red-500/30 bg-red-500/10'
+                    }`}
+                  >
+                    <div className={`font-semibold ${detail.passed ? 'text-emerald-300' : 'text-red-300'}`}>
+                      Test {index + 1} {(detail.isPublic ?? detail.visibility === 'public') ? '(Public)' : '(Hidden)'}: {detail.passed ? '✓ Pass' : '✗ Fail'}
+                    </div>
+                    {detail.input && (
+                      <div className="mt-1 text-white/70">
+                        <div className="text-white/50">Input:</div>
+                        <pre className="text-white/60 whitespace-pre-wrap wrap-break-word">{detail.input}</pre>
+                      </div>
+                    )}
+                    {detail.expectedOutput && (
+                      <div className="mt-1 text-white/70">
+                        <div className="text-white/50">Expected:</div>
+                        <pre className="text-white/60 whitespace-pre-wrap wrap-break-word">{detail.expectedOutput}</pre>
+                      </div>
+                    )}
+                    {!detail.passed && detail.actualOutput && (
+                      <div className="mt-1 text-white/70">
+                        <div className="text-white/50">Your Output:</div>
+                        <pre className="text-white/60 whitespace-pre-wrap wrap-break-word">{detail.actualOutput}</pre>
+                      </div>
+                    )}
+                    {!detail.passed && detail.error && (
+                      <div className="mt-1 text-red-400">
+                        <div className="text-red-300">Error:</div>
+                        <pre className="text-red-400 whitespace-pre-wrap wrap-break-word">{detail.error}</pre>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
         ) : null}
       </div>
