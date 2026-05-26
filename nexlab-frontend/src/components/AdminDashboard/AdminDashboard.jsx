@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Archive, BarChart3, BookOpen, Eye, EyeOff, FileText, LogOut, Shield, Trash2, UserX, Users } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, FileText, LogOut, Shield, Trash2, UserX, Users } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import {
   deleteAdminCourse,
@@ -16,8 +16,6 @@ import {
   getAdminSubmissions,
   getAdminUserActivity,
   getAdminUsers,
-  setAdminCourseArchived,
-  setAdminExamHidden,
   setAdminUserDisabled
 } from '../../services/api';
 import { logout } from '../../services/authService';
@@ -35,13 +33,7 @@ const statLabels = {
   exams: 'Exams'
 };
 
-function StatusBadge({ active, activeText, inactiveText }) {
-  return (
-    <span className={`rounded-full border px-2 py-1 text-xs ${active ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
-      {active ? activeText : inactiveText}
-    </span>
-  );
-}
+// StatusBadge removed — Archived/Hidden UI not required.
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('users');
@@ -190,16 +182,6 @@ function AdminDashboard() {
     }
   };
 
-  const handleArchiveCourse = async (course) => {
-    try {
-      const response = await setAdminCourseArchived(course._id, !course.archived);
-      setCourses((prev) => prev.map((item) => (item._id === course._id ? { ...item, ...response.course } : item)));
-      toast.success(response.course?.archived ? 'Course archived.' : 'Course restored.');
-    } catch (error) {
-      toast.error(error.message || 'Unable to update course.');
-    }
-  };
-
   const handleOpenCourseExams = (course) => {
     setSelectedExamCourseId(course._id);
     setActiveTab('exams');
@@ -216,16 +198,7 @@ function AdminDashboard() {
       toast.error(error.message || 'Unable to delete exam.');
     }
   };
-
-  const handleHideExam = async (exam) => {
-    try {
-      const response = await setAdminExamHidden(exam._id, !exam.hidden);
-      setExams((prev) => prev.map((item) => (item._id === exam._id ? { ...item, ...response.exam } : item)));
-      toast.success(response.exam?.hidden ? 'Exam hidden.' : 'Exam visible.');
-    } catch (error) {
-      toast.error(error.message || 'Unable to update exam.');
-    }
-  };
+  
 
   const renderUsers = (items, roleLabel) => (
     <div className="grid gap-3">
@@ -381,10 +354,6 @@ function AdminDashboard() {
                       <p className="mt-1 text-xs text-white/50">Teacher: {course.teacherId?.name || 'Unknown'} - Students: {course.students?.length || 0}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge active={course.archived} activeText="Archived" inactiveText="Live" />
-                      <button type="button" onClick={() => handleArchiveCourse(course)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 hover:bg-amber-500/20">
-                        <Archive size={14} />{course.archived ? 'Restore' : 'Archive'}
-                      </button>
                       <button type="button" onClick={() => handleOpenCourseExams(course)} className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/20">
                         <FileText size={14} />View Exams
                       </button>
@@ -441,10 +410,6 @@ function AdminDashboard() {
                           <p className="mt-1 text-xs text-white/50">Problems: {exam.problems?.length || 0} - Ends: {exam.endTime ? new Date(exam.endTime).toLocaleString() : '-'}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge active={exam.hidden} activeText="Hidden" inactiveText="Visible" />
-                          <button type="button" onClick={() => handleHideExam(exam)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 hover:bg-amber-500/20">
-                            {exam.hidden ? <Eye size={14} /> : <EyeOff size={14} />}{exam.hidden ? 'Show' : 'Hide'}
-                          </button>
                           <button type="button" onClick={() => handleDeleteExam(exam)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200 hover:bg-red-500/20">
                             <Trash2 size={14} />Delete
                           </button>
