@@ -405,9 +405,10 @@ function App() {
       const response = await runCode(currentProblemState.language, sourceCode, runtimeInput);
       console.log('[Student] runCode response', response);
       updateCurrentProblemState({ output: response.output || response.error || 'No output' });
-    } catch {
-      updateCurrentProblemState({ output: 'Runtime Error.' });
-      toast.error('Run failed.');
+    } catch (error) {
+      const message = error?.message || 'Run failed.';
+      updateCurrentProblemState({ output: message });
+      toast.error(message);
     } finally {
       setIsRunning(false);
     }

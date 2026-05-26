@@ -1,4 +1,4 @@
-const { runCode } = require("./judge0");
+const { runCodeBatch } = require("./judge0");
 
 function normalizeOutput(output = "") {
   return String(output).trim().replace(/\r/g, "");
@@ -37,8 +37,18 @@ async function evaluateSubmission({ code, language, problem, visibility = "all" 
   const allCases = [...publicCases, ...hiddenCases];
   const selectedCases = visibility === "public" ? allCases.filter((item) => item._kind === "public") : allCases;
 
-  for (const testCase of selectedCases) {
-    const result = await runCode(language, code, testCase.input);
+  const batchResults = await runCodeBatch(language, code, selectedCases.map((testCase) => testCase.input));
+
+  if (!Array.isArray(batchResults) || batchResults.length !== selectedCases.length) {
+    const error = new Error("Judge0 batch execution returned an unexpected result set");
+    error.status = 502;
+    error.code = "JUDGE0_BATCH_RESULT_MISMATCH";
+    throw error;
+  }
+
+  for (let index = 0; index < selectedCases.length; index += 1) {
+    const testCase = selectedCases[index];
+    const result = batchResults[index] || {};
     const actualOutput = normalizeOutput(result.output);
     const expectedOutput = normalizeOutput(testCase.output);
     const passed = !result.error && actualOutput === expectedOutput;
