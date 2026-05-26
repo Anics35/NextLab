@@ -11,6 +11,7 @@ import CoursesTab from './CourseManagement/CoursesTab';
 import CourseDetail from './CourseManagement/CourseDetail';
 import QuestionBankTab from './QuestionBank/QuestionBankTab';
 import ExamsTab from './ExamsTab';
+import NotificationsTab from './NotificationsTab';
 import ResultsTab from './Results/ResultsTab';
 
 const RESULT_BASE_HASH = '#/teacher/results';
@@ -393,6 +394,8 @@ function TeacherDashboard() {
           }}
         />
       )}
+
+      {activeTab === 'notifications' && <NotificationsTab user={user} courses={courses} />}
 
       {activeTab === 'results' && (
         <ResultsTab

@@ -6,12 +6,13 @@ import AuthForm from './components/AuthForm';
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import SecureIDE from './components/SecureIDE/SecureIDE';
 import StudentDashboard from './components/StudentDashboard/StudentDashboard';
+import StudentNotifications from './components/StudentDashboard/StudentNotifications';
 import TeacherDashboard from './components/TeacherDashboard/TeacherDashboard';
 import Topbar from './components/layout/Topbar';
 import { clearPersistentAuthForTabClose, getAuthToken, getStoredUser, logout } from './services/authService';
 import { runCode } from './services/codeService';
 import { finalizeExamAttempt, getCourseExams, getExamById, getMyAttempt, saveExamAttempt, startExamAttempt, submitExamAnswer } from './services/api';
-import { emitEvent, initSocket } from './services/socket';
+import { emitEvent, initSocket, socket } from './services/socket';
 
 const LANGUAGE_CONFIG = {
   javascript: { label: 'JavaScript', defaultCode: '// Node.js\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf8");\nconsole.log(input);' },
@@ -97,6 +98,7 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingExamId, setLoadingExamId] = useState(null);
+  const [studentNotifications, setStudentNotifications] = useState([]);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [isExamLocked, setIsExamLocked] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -127,8 +129,34 @@ function App() {
 
   useEffect(() => {
     if (!user || user.role !== 'student') return;
-    initSocket(getAuthToken());
-  }, [user]);
+    const activeSocket = initSocket(getAuthToken());
+
+    const handleStudentNotification = (notification) => {
+      const currentStudentId = String(user?.id || user?._id || '');
+      const targetStudentIds = Array.isArray(notification?.targetStudentIds)
+        ? notification.targetStudentIds.map((studentId) => String(studentId))
+        : [];
+
+      const courseMatches = String(notification?.courseId || '') === String(activeCourse?._id || '');
+      const studentIsTarget = targetStudentIds.length === 0 || targetStudentIds.includes(currentStudentId);
+
+      if (!courseMatches || !studentIsTarget) {
+        return;
+      }
+
+      const id = notification?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const newNotification = { ...notification, id };
+      setStudentNotifications((prev) => [newNotification, ...prev].slice(0, 3));
+
+      // Auto-dismiss after 45 seconds
+      setTimeout(() => {
+        setStudentNotifications((current) => current.filter((n) => n.id !== id));
+      }, 45000);
+    };
+
+    activeSocket?.on('student_notification', handleStudentNotification);
+    return () => activeSocket?.off('student_notification', handleStudentNotification);
+  }, [user, activeCourse]);
 
   useEffect(() => {
     if (!user) return;
@@ -212,6 +240,7 @@ function App() {
     localStorage.removeItem('nextlab_current_exam');
     localStorage.removeItem('nextlab_problem_index');
     localStorage.removeItem('nextlab_teacher_active_tab');
+    setStudentNotifications([]);
     logout();
     setUser(null);
   }, []);
@@ -630,6 +659,10 @@ function App() {
   return (
     <div className="min-h-screen bg-[#050505] text-gray-100 outline-none flex flex-col" onKeyDown={handleKeyDown} tabIndex="0">
       <Toaster position="top-right" />
+      <StudentNotifications
+        notifications={studentNotifications}
+        onDismiss={(id) => setStudentNotifications((prev) => prev.filter((item) => item.id !== id))}
+      />
       {!exam && currentProblem === null && <Topbar user={user} onLogout={handleLogout} />}
 
       {exam && currentProblem ? (

@@ -1,4 +1,4 @@
-export const TABS = ['courses', 'question-bank', 'exams', 'results'];
+export const TABS = ['courses', 'question-bank', 'exams', 'notifications', 'results'];
 
 export const DEFAULT_COURSE_FORM = {
   title: '',

@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const ActivityEvent = require("../models/ActivityEvent");
+const Course = require("../models/Course");
 const ExamAttempt = require("../models/ExamAttempt");
 const { verifyToken } = require("../services/auth");
 const { bindSocketSession, setSocketServer } = require("../services/sessionService");
@@ -34,6 +35,61 @@ async function saveEvent(io, payload) {
   } catch (error) {
     console.error("Activity DB Save Error:", error);
   }
+}
+
+async function handleTeacherNotification(io, socket, payload = {}) {
+  if (!socket.user || socket.user.role !== "teacher") {
+    return;
+  }
+
+  const message = String(payload.message || "").trim();
+  if (!message) {
+    return;
+  }
+
+  const courseId = String(payload.courseId || "").trim();
+  if (!courseId) {
+    return;
+  }
+
+  const course = await Course.findOne({ _id: courseId, teacherId: socket.user.id }).select("students");
+  if (!course) {
+    return;
+  }
+
+  const enrolledStudentIds = (course.students || []).map((studentId) => String(studentId));
+  const sendToAllStudents = Boolean(payload.sendToAllStudents);
+  const requestedTargets = Array.isArray(payload.targetStudentIds)
+    ? payload.targetStudentIds.map((studentId) => String(studentId)).filter(Boolean)
+    : [];
+
+  const targetStudentIds = sendToAllStudents
+    ? enrolledStudentIds
+    : requestedTargets.filter((studentId) => enrolledStudentIds.includes(studentId));
+
+  if (targetStudentIds.length === 0) {
+    return;
+  }
+
+  const title = String(payload.title || "Announcement").trim() || "Announcement";
+  const notificationData = {
+    id: payload.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    message,
+    senderName: socket.user.name,
+    senderId: socket.user.id || socket.user._id,
+    senderRole: socket.user.role,
+    createdAt: payload.createdAt || new Date().toISOString(),
+    courseId: courseId,
+    courseTitle: payload.courseTitle || "",
+    targetStudentIds,
+    sendToAllStudents,
+    priority: payload.priority || "normal"
+  };
+
+  targetStudentIds.forEach((studentId) => {
+    io.to(`user:${studentId}`).emit("student_notification", notificationData);
+  });
 }
 
 async function handleStudentEvent(io, socket, type, payload = {}) {
@@ -209,7 +265,8 @@ function initSocket(httpServer) {
     socket.on("proctor_event", (payload) => {
       io.emit("proctor_alert", payload);
       handleStudentEvent(io, socket, payload.type, payload);
-    }); 
+    });
+    socket.on("teacher_notification", (payload) => handleTeacherNotification(io, socket, payload));
   });
 
   return io;
