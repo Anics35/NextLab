@@ -3,10 +3,12 @@ import { io } from 'socket.io-client';
 // 1. Export the variable so App.jsx and TeacherDashboard can see it immediately
 export let socket;
 
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 export const initSocket = (token) => {
   // Initialize only if not already initialized
   if (!socket) {
-    socket = io('http://localhost:5001', {
+    socket = io(SOCKET_URL, {
       auth: { token },
       autoConnect: true
     });
