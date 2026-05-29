@@ -60,10 +60,10 @@ const buildProblemState = (problem, answer) => {
 const buildSubmissionMap = (attempt, examProblems) => {
   const answers = attempt?.answers || [];
   const map = {};
-  examProblems.forEach((problem, index) => {
+  examProblems.forEach((problem) => {
     const problemId = getProblemId(problem);
     const answer = answers.find((item) => String(item.problemId) === String(problemId));
-    map[problemId] = Boolean(answer?.submittedAt || answer?.total > 0 || answer?.passed > 0 || attempt?.currentProblemIndex > index);
+    map[problemId] = Boolean(answer?.submittedAt);
   });
   return map;
 };
@@ -451,7 +451,10 @@ function App() {
 
       const state = problemStates[problemId] || buildProblemState(problem);
       const language = state.language || getDefaultLanguage();
-      const codeToSubmit = String(lastRunCodeMap[problemId] ?? state.code ?? getDefaultCode(problem, language));
+      const ranCode = lastRunCodeMap[problemId];
+      if (!ranCode) continue;
+
+      const codeToSubmit = String(ranCode);
 
       try {
         const response = await submitExamAnswer({
