@@ -204,7 +204,7 @@ async function getExam(req, res, next) {
       throw createApiError(400, "Exam id must be a valid MongoDB ObjectId", "INVALID_EXAM_ID");
     }
 
-    const exam = await Exam.findById(id).populate("problems.problemId", "title description difficulty publicTestCases hiddenTestCases testCases");
+    const exam = await Exam.findById(id).populate("problems.problemId", "title description difficulty problemType publicTestCases hiddenTestCases testCases");
     if (!exam) {
       throw createApiError(404, "Exam not found", "EXAM_NOT_FOUND");
     }

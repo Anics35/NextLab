@@ -390,7 +390,7 @@ function SecureIDE({
 
         <SplitPanelDivider type="right" onMouseDown={startDragging} />
 
-        <OutputPanel editorRef={editorRef} input={input} setInput={setInput} output={output} result={result} effectiveLocked={effectiveLocked} isSubmitting={isSubmitting} currentProblem={currentProblem} />
+        <OutputPanel editorRef={editorRef} code={code} input={input} setInput={setInput} output={output} result={result} effectiveLocked={effectiveLocked} isSubmitting={isSubmitting} currentProblem={currentProblem} onRunCode={(nextInput) => onRunCode?.(syncEditorCode(), nextInput)} />
       </main>
     </div>
   );

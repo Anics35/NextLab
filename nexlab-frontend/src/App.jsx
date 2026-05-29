@@ -408,11 +408,11 @@ function App() {
     setProblemStates((prev) => ({ ...prev, [currentProblemId]: { ...buildProblemState(currentProblem), ...prev[currentProblemId], ...patch } }));
   }, [currentProblem, currentProblemId]);
 
-  const handleRunCode = async (editorCode) => {
+  const handleRunCode = async (editorCode, runtimeInputOverride = null) => {
     if (!currentProblem || isExamLocked || isCurrentProblemLocked) return;
     const sourceCode = String(editorCode ?? currentProblemState.code ?? '');
     const runningProblemId = getProblemId(currentProblem);
-    const runtimeInput = String(currentProblemState.input ?? '');
+    const runtimeInput = String(runtimeInputOverride ?? currentProblemState.input ?? '');
 
     console.log('FINAL CODE:', sourceCode);
     console.log('SENT CODE:', sourceCode);
@@ -426,10 +426,12 @@ function App() {
       const response = await runCode(currentProblemState.language, sourceCode, runtimeInput);
       console.log('[Student] runCode response', response);
       updateCurrentProblemState({ output: extractRunMessage(response, 'No output') });
+      return response;
     } catch (error) {
       const message = extractRunMessage(error?.response?.data || error?.data || error?.cause?.response?.data || error, error?.message || 'Run failed.');
       updateCurrentProblemState({ output: message });
       toast.error(message);
+      return { success: false, output: '', error: message };
     } finally {
       setIsRunning(false);
     }

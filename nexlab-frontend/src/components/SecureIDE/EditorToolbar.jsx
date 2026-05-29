@@ -1,7 +1,8 @@
 import { Lock, LoaderCircle, Play, Send } from 'lucide-react';
 
 function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRunCode, isSubmitting, onSubmit, currentProblemSubmitted, effectiveLocked, currentProblem }) {
-  const isDesignProblem = currentProblem?.problemType === 'design';
+  const normalizedProblemType = String(currentProblem?.problemType || '').trim().toLowerCase();
+  const isDesignProblem = normalizedProblemType === 'design' || normalizedProblemType === 'designproblem';
 
   return (
     <div className="flex h-12 items-center justify-between border-b border-white/10 bg-[#0b0b0b] px-4">
