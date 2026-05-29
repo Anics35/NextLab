@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, X, Share2 } from 'lucide-react';
-import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics, deleteExam } from '../../../services/api';
+import { ArrowLeft, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FileSpreadsheet, LoaderCircle, X, Share2 } from 'lucide-react';
+import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics, deleteExam, downloadExamReportPdf, downloadExamReportXlsx } from '../../../services/api';
 import { getAuthToken } from '../../../services/authService';
 import { cardClass } from '../constants';
 import LiveStudentListPanel from './LiveStudentListPanel';
@@ -87,8 +87,11 @@ function ResultsTab({
   const [examStatusOverride, setExamStatusOverride] = useState(null);
   const [examTimeOverride, setExamTimeOverride] = useState(null);
   const [isExamActionHovered, setIsExamActionHovered] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [isReportMenuOpen, setIsReportMenuOpen] = useState(false);
   const [timerNow, setTimerNow] = useState(() => Date.now());
   const teacherServerOffsetRef = useRef(0);
+  const reportMenuRef = useRef(null);
 
   useEffect(() => {
     if (!window.location.hash.startsWith(RESULT_BASE_HASH)) {
@@ -117,6 +120,17 @@ function ResultsTab({
   useEffect(() => {
     setRecentSubmissionEvents([]);
   }, [route.examId]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!reportMenuRef.current?.contains(event.target)) {
+        setIsReportMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleOutsideClick);
+    return () => window.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const selectedCourse = useMemo(
     () => courses.find((item) => item._id === (route.courseId || selectedCourseId)) || null,
@@ -521,6 +535,31 @@ function ResultsTab({
     }
   };
 
+  const handleDownloadExamReport = useCallback(async (format) => {
+    if (!route.examId) {
+      toast.error('Select an exam first.');
+      return;
+    }
+
+    setIsDownloadingReport(true);
+    try {
+      const blob = format === 'xlsx' ? await downloadExamReportXlsx(route.examId) : await downloadExamReportPdf(route.examId);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = `nextlab-exam-report-${route.examId}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success(format === 'xlsx' ? 'Spreadsheet downloaded.' : 'PDF downloaded.');
+    } catch (error) {
+      toast.error(error.message || 'Unable to download exam report.');
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }, [route.examId]);
+
   const openCourse = (courseId) => {
     setSelectedCourseId(courseId);
     setResultHash(`${RESULT_BASE_HASH}/course/${encodeURIComponent(courseId)}`);
@@ -626,13 +665,13 @@ function ResultsTab({
                       type="button"
                       onClick={handleStopExam}
                       disabled={isFinalizingMarks || !route.examId}
-                      className="inline-flex min-w-[120px] items-center justify-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                      className="inline-flex min-w-30 items-center justify-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
                     >
                       {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
                       Stop Exam
                     </button>
                   ) : (
-                    <div className="inline-flex min-w-[120px] items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
+                    <div className="inline-flex min-w-30 items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
                       <span className="uppercase tracking-[0.22em] text-[10px] text-red-300/80">Timer</span>
                       <span className="tabular-nums">{teacherTimerInfo?.label || '-- sec'}</span>
                       {teacherTimerInfo?.compactClock ? <span className="text-xs text-red-200/70">{teacherTimerInfo.compactClock}</span> : null}
@@ -687,6 +726,46 @@ function ResultsTab({
                 <Share2 size={14} />
                 Select Students
               </button>
+              <div ref={reportMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsReportMenuOpen((value) => !value)}
+                  disabled={!route.examId || isDownloadingReport}
+                  className="inline-flex items-center gap-2 rounded-md bg-slate-700 px-3 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50"
+                >
+                  {isDownloadingReport ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
+                  Download Report
+                  <ChevronDown size={14} />
+                </button>
+                {isReportMenuOpen ? (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-md border border-white/10 bg-[#111] shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReportMenuOpen(false);
+                        void handleDownloadExamReport('pdf');
+                      }}
+                      disabled={!route.examId || isDownloadingReport}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                    >
+                      <Download size={14} />
+                      PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReportMenuOpen(false);
+                        void handleDownloadExamReport('xlsx');
+                      }}
+                      disabled={!route.examId || isDownloadingReport}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel / Google Sheet
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 

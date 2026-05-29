@@ -87,6 +87,16 @@ export const getMyAttempt = (examId) =>
 export const getStudentAttempt = (examId, studentId) =>
   request(api.get(`/exam-attempts/${examId}/student/${studentId}`), 'Unable to load student attempt.');
 
+export const downloadExamReportPdf = async (examId) => {
+  const response = await api.get(`/results/exam/${examId}/pdf`, { responseType: 'blob' });
+  return response.data;
+};
+
+export const downloadExamReportXlsx = async (examId) => {
+  const response = await api.get(`/results/exam/${examId}/xlsx`, { responseType: 'blob' });
+  return response.data;
+};
+
 export const submitExamAnswer = ({ examId, problemId, code, language, input = '', finalSubmit = false }) =>
   request(
     api.post('/exam-attempts/submit', { examId, problemId, code, language, input, finalSubmit }),

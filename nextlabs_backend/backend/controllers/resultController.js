@@ -1,8 +1,9 @@
 const Course = require("../models/Course");
 const Exam = require("../models/Exam");
 const ExamAttempt = require("../models/ExamAttempt");
+const Submission = require("../models/Submission");
 const User = require("../models/User");
-const { buildResultPdf } = require("../services/pdfService");
+const { buildResultPdf, buildExamReportPdf, buildExamReportWorkbook } = require("../services/pdfService");
 const { createApiError } = require("../utils/apiError");
 const { isValidObjectId } = require("../utils/validators");
 
@@ -41,4 +42,73 @@ async function downloadResultPdf(req, res, next) {
   }
 }
 
-module.exports = { downloadResultPdf };
+async function downloadExamReportPdf(req, res, next) {
+  try {
+    const { examId } = req.params;
+
+    if (!isValidObjectId(examId)) {
+      throw createApiError(400, "examId must be a valid id", "INVALID_ID");
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      throw createApiError(404, "Exam not found", "EXAM_NOT_FOUND");
+    }
+
+    const course = await Course.findById(exam.courseId);
+    const isTeacher = course && String(course.teacherId) === req.user.id;
+    if (!isTeacher) {
+      throw createApiError(403, "Only the course teacher can download the exam report", "FORBIDDEN");
+    }
+
+    const submissions = await Submission.find({ examId })
+      .populate("userId", "name email rollNumber semester")
+      .populate("examAttemptId", "totalScore")
+      .sort({ updatedAt: -1 });
+
+    const pdf = await buildExamReportPdf({ exam, course, submissions });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="nextlab-exam-report-${examId}.pdf"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function downloadExamReportXlsx(req, res, next) {
+  try {
+    const { examId } = req.params;
+
+    if (!isValidObjectId(examId)) {
+      throw createApiError(400, "examId must be a valid id", "INVALID_ID");
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      throw createApiError(404, "Exam not found", "EXAM_NOT_FOUND");
+    }
+
+    const course = await Course.findById(exam.courseId);
+    const isTeacher = course && String(course.teacherId) === req.user.id;
+    if (!isTeacher) {
+      throw createApiError(403, "Only the course teacher can download the exam report", "FORBIDDEN");
+    }
+
+    const submissions = await Submission.find({ examId })
+      .populate("userId", "name email rollNumber semester")
+      .populate("examAttemptId", "totalScore")
+      .sort({ updatedAt: -1 });
+
+    const workbook = await buildExamReportWorkbook({ exam, course, submissions });
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="nextlab-exam-report-${examId}.xlsx"`);
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { downloadResultPdf, downloadExamReportPdf, downloadExamReportXlsx };
