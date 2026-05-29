@@ -1,8 +1,8 @@
 import api from './api';
 
-export const runCode = async (language, code, input) => {
+export const runCode = async (language, code, input, options = {}) => {
   try {
-    const response = await api.post('/run', { language, code, input });
+    const response = await api.post('/run', { language, code, input, ...options });
     return response.data; // { success, output, error, status }
   } catch (error) {
     const resp = error?.data || error?.response?.data || {};

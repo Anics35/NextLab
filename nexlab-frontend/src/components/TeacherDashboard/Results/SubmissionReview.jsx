@@ -2,7 +2,8 @@ import { Editor } from '@monaco-editor/react';
 import { LoaderCircle, Play, Save, Maximize2, Minimize2, X } from 'lucide-react';
 import { runCode } from '../../../services/codeService';
 import { toast } from 'react-hot-toast';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import DesignTerminal from '../../SecureIDE/DesignTerminal';
 
 function SubmissionReview({
   selectedStudent,
@@ -26,6 +27,15 @@ function SubmissionReview({
 }) {
   const reviewProblems = selectedSubmission?.problems || [];
   const [isModalFullscreen, setIsModalFullscreen] = useState(false);
+  const [teacherRunResult, setTeacherRunResult] = useState(null);
+  const modalRef = useRef(null);
+
+  const selectedProblemId = selectedProblem?.problemId?._id || selectedProblem?.problemId || '';
+
+  useEffect(() => {
+    setTeacherOutput('');
+    setTeacherRunResult(null);
+  }, [selectedProblemId, setTeacherOutput]);
 
   const handleTeacherRunCode = async () => {
     if (!selectedProblem?.code) {
@@ -35,11 +45,70 @@ function SubmissionReview({
 
     setIsTeacherRunning(true);
     try {
-      const response = await runCode(selectedProblem.language, selectedProblem.code, teacherInput);
+      const response = await runCode(selectedProblem.language, selectedProblem.code, teacherInput, { problemId: selectedProblemId });
+      setTeacherRunResult(response.publicRun || null);
       setTeacherOutput(response.output || response.error || 'No output');
     } catch (error) {
       setTeacherOutput(error.message || 'No output');
+      setTeacherRunResult(null);
       toast.error(error.message || 'Unable to run submission.');
+    } finally {
+      setIsTeacherRunning(false);
+    }
+  };
+
+  const openFullscreenRunner = async () => {
+    setIsCodeModalOpen(true);
+    setIsModalFullscreen(true);
+    if (document.documentElement?.requestFullscreen && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+
+  const closeFullscreenRunner = async () => {
+    setIsCodeModalOpen(false);
+    setIsModalFullscreen(false);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      await document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  const toggleModalFullscreen = async () => {
+    const nextFullscreen = !isModalFullscreen;
+    setIsModalFullscreen(nextFullscreen);
+    if (nextFullscreen && modalRef.current?.requestFullscreen && !document.fullscreenElement) {
+      await modalRef.current.requestFullscreen().catch(() => {});
+    } else if (!nextFullscreen && document.fullscreenElement && document.exitFullscreen) {
+      await document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  const publicRunLabel = teacherRunResult
+    ? `Public ${teacherRunResult.passedPublic || 0}/${teacherRunResult.totalPublic || 0}`
+    : 'Public -/-';
+  const normalizedProblemType = String(selectedProblem?.problemId?.problemType || selectedProblem?.problemType || '').trim().toLowerCase();
+  const hasNoTestcaseResults = Number(selectedProblem?.totalPublic || 0) === 0 && Number(selectedProblem?.totalHidden || 0) === 0;
+  const isDesignProblem = normalizedProblemType === 'design' || normalizedProblemType === 'designproblem' || hasNoTestcaseResults;
+
+  const handleTeacherTerminalRunCode = async (runtimeInput) => {
+    if (!selectedProblem?.code) {
+      toast.error('No submitted code available.');
+      return { success: false, output: '', error: 'No submitted code available.' };
+    }
+
+    setIsTeacherRunning(true);
+    try {
+      const response = await runCode(selectedProblem.language, selectedProblem.code, runtimeInput, { problemId: selectedProblemId });
+      setTeacherRunResult(response.publicRun || null);
+      setTeacherOutput(response.output || response.error || 'No output');
+      setTeacherInput(runtimeInput);
+      return response;
+    } catch (error) {
+      const message = error.message || 'Unable to run submission.';
+      setTeacherOutput(message);
+      setTeacherRunResult(null);
+      toast.error(message);
+      return { success: false, output: '', error: message };
     } finally {
       setIsTeacherRunning(false);
     }
@@ -128,20 +197,37 @@ function SubmissionReview({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsCodeModalOpen(true)}
+                  onClick={openFullscreenRunner}
                   className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500"
                 >
                   Fullscreen
                 </button>
               </div>
 
-              <pre className="bg-black/40 border border-gray-800 rounded-md p-3 text-xs text-gray-300 overflow-auto whitespace-pre-wrap max-h-48">
-                {selectedProblem.code || 'No code submitted.'}
-              </pre>
+              <div className="h-56 overflow-hidden rounded-md border border-gray-800 bg-black">
+                <Editor
+                  height="100%"
+                  language={selectedProblem.language || 'javascript'}
+                  value={selectedProblem.code || '// No code submitted'}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    fontFamily: "'Fira Code', 'Courier New', monospace",
+                    scrollBeyondLastLine: false
+                  }}
+                  theme="vs-dark"
+                />
+              </div>
 
               {/* Teacher Run */}
               <div className="mt-4">
-                <p className="mb-2 text-sm text-gray-300">Teacher Run Input</p>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-300">Teacher Run Input</p>
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                    {publicRunLabel}
+                  </span>
+                </div>
                 <textarea
                   className="w-full p-2 bg-black border border-gray-800 rounded-md text-sm text-white mb-3"
                   value={teacherInput}
@@ -161,6 +247,20 @@ function SubmissionReview({
                 <pre className="mt-3 bg-black/40 border border-gray-800 rounded-md p-3 text-xs text-gray-300 overflow-auto whitespace-pre-wrap max-h-32">
                   {teacherOutput || 'No output'}
                 </pre>
+                {teacherRunResult?.details?.length ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {teacherRunResult.details.map((detail, index) => (
+                      <div
+                        key={`${selectedSubmission._id}-teacher-run-${index}`}
+                        className={`rounded-md border p-2 text-xs ${
+                          detail.passed ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'
+                        }`}
+                      >
+                        Public {index + 1}: {detail.passed ? 'Pass' : 'Fail'}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               {/* Test Results */}
@@ -235,7 +335,7 @@ function SubmissionReview({
       {/* Code Fullscreen Modal */}
       {isCodeModalOpen && selectedProblem && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`bg-[#0a0a0a] border border-gray-800 rounded-xl flex flex-col ${
+          <div ref={modalRef} className={`bg-[#0a0a0a] border border-gray-800 rounded-xl flex flex-col ${
             isModalFullscreen ? 'w-screen h-screen' : 'w-full h-[90vh] max-w-6xl'
           }`}>
             {/* Modal Header */}
@@ -247,7 +347,7 @@ function SubmissionReview({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalFullscreen(!isModalFullscreen)}
+                  onClick={toggleModalFullscreen}
                   className="p-2 rounded-lg border border-white/15 bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
                   title={isModalFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
                 >
@@ -255,7 +355,7 @@ function SubmissionReview({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsCodeModalOpen(false)}
+                  onClick={closeFullscreenRunner}
                   className="p-2 rounded-lg border border-gray-700/50 bg-gray-700/20 text-white/70 hover:bg-gray-700/40 transition-colors"
                   title="Close"
                 >
@@ -265,9 +365,8 @@ function SubmissionReview({
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-hidden p-4">
-              {/* Code Editor */}
-              <div className="h-full border border-gray-800 rounded-md overflow-hidden bg-black">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4 overflow-hidden p-4">
+              <div className="min-h-0 overflow-hidden rounded-md border border-gray-800 bg-black">
                 <Editor
                   height="100%"
                   language={selectedProblem.language || 'javascript'}
@@ -278,10 +377,60 @@ function SubmissionReview({
                     fontSize: 13,
                     fontFamily: "'Fira Code', 'Courier New', monospace",
                     scrollBeyondLastLine: false,
-                    theme: 'vs-dark'
                   }}
+                  theme="vs-dark"
                 />
               </div>
+              {isDesignProblem ? (
+                <DesignTerminal
+                  code={selectedProblem.code || ''}
+                  onRunCode={handleTeacherTerminalRunCode}
+                  onInputChange={setTeacherInput}
+                  disabled={isTeacherRunning}
+                  className="h-full"
+                />
+              ) : (
+                <div className="flex min-h-0 flex-col rounded-md border border-gray-800 bg-black/40 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-white">Teacher Run</p>
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                      {publicRunLabel}
+                    </span>
+                  </div>
+                  <textarea
+                    className="min-h-28 w-full resize-y rounded-md border border-gray-800 bg-black p-2 text-sm text-white outline-none"
+                    value={teacherInput}
+                    onChange={(event) => setTeacherInput(event.target.value)}
+                    placeholder="Enter input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTeacherRunCode}
+                    disabled={isTeacherRunning}
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+                  >
+                    {isTeacherRunning ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
+                    {isTeacherRunning ? 'Running...' : 'Run Code'}
+                  </button>
+                  <pre className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-gray-800 bg-black p-3 text-xs text-gray-300 whitespace-pre-wrap">
+                    {teacherOutput || 'No output'}
+                  </pre>
+                  {teacherRunResult?.details?.length ? (
+                    <div className="mt-3 max-h-40 overflow-y-auto space-y-2">
+                      {teacherRunResult.details.map((detail, index) => (
+                        <div
+                          key={`${selectedSubmission._id}-modal-run-${index}`}
+                          className={`rounded-md border p-2 text-xs ${
+                            detail.passed ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'
+                          }`}
+                        >
+                          Public {index + 1}: {detail.passed ? 'Pass' : 'Fail'}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
         </div>

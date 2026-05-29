@@ -31,6 +31,28 @@ async function run(req, res, next) {
     }
 
     const result = await runCode(language, code, input);
+    let publicEvaluation = null;
+
+    if (problemId && isValidObjectId(problemId)) {
+      const problem = await Problem.findById(problemId);
+      if (problem && problem.problemType !== "design") {
+        try {
+          publicEvaluation = await evaluateSubmission({ code, language, problem, visibility: "public" });
+        } catch (evaluationError) {
+          publicEvaluation = {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            passedPublic: 0,
+            totalPublic: 0,
+            passedHidden: 0,
+            totalHidden: 0,
+            details: [],
+            error: evaluationError.message || "Unable to evaluate public test cases."
+          };
+        }
+      }
+    }
     console.log("INPUT:", input);
     console.log("OUTPUT:", result.output || result.error || "");
     await ActivityEvent.create({
@@ -48,7 +70,15 @@ async function run(req, res, next) {
 
     res.json({
       success: true,
-      ...result
+      ...result,
+      ...(publicEvaluation
+        ? {
+            publicRun: publicEvaluation,
+            passedPublic: publicEvaluation.passedPublic,
+            totalPublic: publicEvaluation.totalPublic,
+            details: publicEvaluation.details
+          }
+        : {})
     });
   } catch (error) {
     next(error);

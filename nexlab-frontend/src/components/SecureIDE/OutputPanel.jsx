@@ -21,6 +21,7 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
   const terminalRef = useRef(null);
   const terminalLogRef = useRef(null);
   const waitingForInputRef = useRef(false);
+  const inputGroupsRef = useRef([]);
   const sessionPrefixRef = useRef('');
   const sessionInputLinesRef = useRef([]);
   const decorationIdsRef = useRef([]);
@@ -34,7 +35,7 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
   }
 
   function extractLastPromptText(segment) {
-    const outputStatements = [];
+    const statements = [];
     const patterns = [
       {
         regex: /cout\s*(?:<<\s*(?:"([^"]*)"|endl|[^;]+))*\s*;/gi,
@@ -61,14 +62,13 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
     for (const { regex, text } of patterns) {
       let match = regex.exec(segment);
       while (match) {
-        outputStatements.push({ index: match.index, text: text(match[0], match) });
+        statements.push({ index: match.index, text: text(match[0], match) });
         match = regex.exec(segment);
       }
     }
 
-    return outputStatements
-      .sort((a, b) => a.index - b.index)
-      .at(-1)?.text || '';
+    statements.sort((a, b) => a.index - b.index);
+    return statements[statements.length - 1]?.text || '';
   }
 
   function parseInputGroups(sourceCode) {
@@ -99,11 +99,7 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
     for (const { regex, count } of patterns) {
       let match = regex.exec(source);
       while (match) {
-        groups.push({
-          index: match.index,
-          count: Math.max(1, count(match[0])),
-          prompt: ''
-        });
+        groups.push({ index: match.index, count: Math.max(1, count(match[0])), prompt: '' });
         match = regex.exec(source);
       }
     }
@@ -144,6 +140,38 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
       .filter(Boolean);
   }
 
+  function getCompletedInputGroupCount(inputGroups, providedInputCount) {
+    let consumed = 0;
+    let completed = 0;
+
+    for (const group of inputGroups) {
+      consumed += group.count;
+      if (providedInputCount < consumed) break;
+      completed += 1;
+    }
+
+    return completed;
+  }
+
+  function trimOutputAtPendingPrompt(rawOutput, inputGroups, providedInputCount, requiredInputCount) {
+    const outputText = String(rawOutput || '').replace(/\r/g, '');
+    if (providedInputCount >= requiredInputCount) {
+      return outputText.trimEnd();
+    }
+
+    const nextPrompt = inputGroups[getCompletedInputGroupCount(inputGroups, providedInputCount)]?.prompt || '';
+    if (!nextPrompt) {
+      return outputText.trimEnd();
+    }
+
+    const promptIndex = outputText.toLowerCase().indexOf(nextPrompt.toLowerCase());
+    if (promptIndex === -1) {
+      return outputText.trimEnd();
+    }
+
+    return outputText.slice(0, promptIndex + nextPrompt.length).trimEnd();
+  }
+
   function mergeTerminalEcho(rawOutput, stdinLines, inputGroups) {
     const lines = stdinLines.filter((line) => line.length > 0);
     let remaining = String(rawOutput || '').replace(/\r/g, '');
@@ -154,64 +182,29 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
       return [...items, { start: previousEnd, end: previousEnd + group.count, prompt: group.prompt }];
     }, []);
 
-    for (let index = 0; index < lines.length; index += 1) {
+    for (const line of lines) {
       const groupForLine = groupBounds.find((group) => tokenCountBeforeLine >= group.start && tokenCountBeforeLine < group.end);
       const prompt = groupForLine && tokenCountBeforeLine === groupForLine.start ? groupForLine.prompt : '';
-      tokenCountBeforeLine += getInputTokens([lines[index]]).length;
+      tokenCountBeforeLine += getInputTokens([line]).length;
 
       if (!prompt) {
-        transcript += `${lines[index]}\n`;
+        transcript += `${line}\n`;
         continue;
       }
 
-      const promptIndex = remaining.indexOf(prompt);
+      const promptIndex = remaining.toLowerCase().indexOf(prompt.toLowerCase());
       if (promptIndex === -1) {
-        transcript += `${lines[index]}\n`;
+        transcript += `${prompt} ${line}\n`;
         continue;
       }
 
       const promptEnd = promptIndex + prompt.length;
       transcript += remaining.slice(0, promptEnd).trimEnd();
-      transcript += ` ${lines[index]}\n`;
+      transcript += ` ${line}\n`;
       remaining = remaining.slice(promptEnd).replace(/^[ \t]*/, '');
     }
 
     return `${transcript}${remaining}`.trimEnd();
-  }
-
-  function getCompletedInputGroupCount(inputGroups, providedInputCount) {
-    let consumed = 0;
-    let completed = 0;
-
-    for (const group of inputGroups) {
-      consumed += group.count;
-      if (providedInputCount < consumed) {
-        break;
-      }
-      completed += 1;
-    }
-
-    return completed;
-  }
-
-  function trimOutputAtNextPrompt(rawOutput, inputGroups, providedInputCount, requiredInputCount) {
-    const outputText = String(rawOutput || '').replace(/\r/g, '');
-    if (providedInputCount >= requiredInputCount) {
-      return outputText.trimEnd();
-    }
-
-    const nextGroupIndex = getCompletedInputGroupCount(inputGroups, providedInputCount);
-    const nextPrompt = inputGroups[nextGroupIndex]?.prompt || '';
-    if (!nextPrompt) {
-      return outputText.trimEnd();
-    }
-
-    const promptIndex = outputText.indexOf(nextPrompt);
-    if (promptIndex === -1) {
-      return outputText.trimEnd();
-    }
-
-    return outputText.slice(0, promptIndex + nextPrompt.length).trimEnd();
   }
 
   function buildPartialTranscript(stdinLines, inputGroups) {
@@ -272,9 +265,15 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
 
     setTerminalInput('');
     waitingForInputRef.current = false;
+    inputGroupsRef.current = [];
     sessionPrefixRef.current = '';
     sessionInputLinesRef.current = [];
-    setTerminalLog('');
+    const intro = [
+      '> Design Terminal ready.',
+      '> Compile with g++ or gcc, then run ./a.out.',
+      '> Type input after the prompt line and press Enter.'
+    ].join('\n');
+    setTerminalLog((prev) => prev || intro);
   }, [currentProblem?._id, currentProblem?.id, isDesignProblem]);
 
   useEffect(() => {
@@ -295,6 +294,7 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
       setTerminalLog('');
       setInput?.('');
       waitingForInputRef.current = false;
+      inputGroupsRef.current = [];
       sessionPrefixRef.current = '';
       sessionInputLinesRef.current = [];
       setTerminalInput('');
@@ -312,42 +312,42 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
       const requiredInputCount = inputGroups.reduce((total, group) => total + group.count, 0);
       const promptText = inputGroups[0]?.prompt || extractPromptText(code) || '';
       const prefix = `${terminalLog ? `${terminalLog}\n` : ''}$ ${command}\n`;
-      waitingForInputRef.current = requiredInputCount > 0;
+      inputGroupsRef.current = inputGroups;
       sessionPrefixRef.current = prefix;
       sessionInputLinesRef.current = [];
-      setTerminalLog(`${prefix}${requiredInputCount > 0 ? promptText || '' : 'Running...'}`.trimEnd());
+      waitingForInputRef.current = requiredInputCount > 0;
+      setTerminalLog(`${prefix}${requiredInputCount > 0 ? promptText : 'Running...'}`.trimEnd());
       setTerminalInput('');
       if (requiredInputCount === 0) {
         const response = await onRunCode?.('');
-        const rawOutput = response?.output || response?.error || response?.stderr || response?.compile_output || '';
-        setTerminalLog(`${sessionPrefixRef.current}${String(rawOutput || '').replace(/\r/g, '').trimEnd()}`.trimEnd());
+        const runOutput = response?.output || response?.error || response?.stderr || response?.compile_output || '';
+        setTerminalLog(`${prefix}${String(runOutput || '').replace(/\r/g, '').trimEnd()}`.trimEnd());
       }
       return;
     }
 
+    const inputGroups = inputGroupsRef.current;
     const nextLines = [...sessionInputLinesRef.current, command];
-    sessionInputLinesRef.current = nextLines;
-    const inputGroups = parseInputGroups(code);
     const requiredInputCount = inputGroups.reduce((total, group) => total + group.count, 0);
     const providedInputCount = getInputTokens(nextLines).length;
-    const missingInputCount = Math.max(0, requiredInputCount - providedInputCount);
     const nextInput = nextLines.join('\n');
-    setInput?.(nextLines.join('\n'));
+    sessionInputLinesRef.current = nextLines;
+    setInput?.(nextInput);
 
     if (waitingForInputRef.current) {
       const firstGroupCount = inputGroups[0]?.count || 0;
       if (requiredInputCount > 0 && providedInputCount < firstGroupCount) {
-        setTerminalLog(`${sessionPrefixRef.current}${buildPartialTranscript(nextLines, inputGroups)}`);
+        setTerminalLog(`${sessionPrefixRef.current}${buildPartialTranscript(nextLines, inputGroups)}`.trimEnd());
         setTerminalInput('');
         return;
       }
 
       const response = await onRunCode?.(nextInput);
-      const rawOutput = response?.output || response?.error || response?.stderr || response?.compile_output || '';
-      const visibleOutput = trimOutputAtNextPrompt(rawOutput, inputGroups, providedInputCount, requiredInputCount);
+      const runOutput = response?.output || response?.error || response?.stderr || response?.compile_output || '';
+      const visibleOutput = trimOutputAtPendingPrompt(runOutput, inputGroups, providedInputCount, requiredInputCount);
       const transcript = mergeTerminalEcho(visibleOutput, nextLines, inputGroups);
       setTerminalLog(`${sessionPrefixRef.current}${transcript}`.trimEnd());
-      waitingForInputRef.current = missingInputCount > 0;
+      waitingForInputRef.current = providedInputCount < requiredInputCount;
     } else {
       appendLine(command);
     }
@@ -435,10 +435,10 @@ function OutputPanel({ editorRef, code, input, setInput, output, result, effecti
         {result && !isDesignProblem ? (
           <div className="mt-3 space-y-2">
             <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">
-              <div className="font-semibold">Test Results</div>
+              <div className="font-semibold">Public Test Results</div>
               <div className="mt-1">
-                Passed {result.passed || 0}/{result.total || 0} · Public {result.passedPublic || 0}/{result.totalPublic || 0} ·
-                Hidden {result.passedHidden || 0}/{result.totalHidden || 0}
+                Public {result.passedPublic || 0}/{result.totalPublic || 0}
+                {Number(result.totalHidden || 0) > 0 ? ` · Hidden ${result.passedHidden || 0}/${result.totalHidden || 0}` : ''}
               </div>
             </div>
             {Array.isArray(result.details) && result.details.length > 0 && (

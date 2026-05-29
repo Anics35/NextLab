@@ -423,9 +423,12 @@ function App() {
       if (runningProblemId) {
         setLastRunCodeMap((prev) => ({ ...prev, [runningProblemId]: sourceCode }));
       }
-      const response = await runCode(currentProblemState.language, sourceCode, runtimeInput);
+      const response = await runCode(currentProblemState.language, sourceCode, runtimeInput, { problemId: runningProblemId });
       console.log('[Student] runCode response', response);
-      updateCurrentProblemState({ output: extractRunMessage(response, 'No output') });
+      updateCurrentProblemState({
+        output: extractRunMessage(response, 'No output'),
+        result: response?.publicRun ? response.publicRun : currentProblemState.result
+      });
       return response;
     } catch (error) {
       const message = extractRunMessage(error?.response?.data || error?.data || error?.cause?.response?.data || error, error?.message || 'Run failed.');
