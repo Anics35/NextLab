@@ -17,6 +17,7 @@ import { emitEvent, initSocket, socket } from './services/socket';
 const LANGUAGE_CONFIG = {
   javascript: { label: 'JavaScript', defaultCode: '// Node.js\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf8");\nconsole.log(input);' },
   python: { label: 'Python 3', defaultCode: '# Python 3\nimport sys\nprint(sys.stdin.read())' },
+  c: { label: 'C (GCC 9.2)', defaultCode: '#include <stdio.h>\n\nint main(void) {\n  return 0;\n}' },
   cpp: { label: 'C++ (GCC 9.2)', defaultCode: '#include <iostream>\nusing namespace std;\nint main() {\n  return 0;\n}' },
   java: { label: 'Java', defaultCode: 'import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n  }\n}' }
 };
