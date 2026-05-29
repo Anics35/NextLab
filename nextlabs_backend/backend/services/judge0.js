@@ -27,6 +27,24 @@ function isRapidApiJudge0(baseUrl) {
   return /rapidapi/i.test(baseUrl) || /judge0-ce\.p\.rapidapi\.com/i.test(baseUrl);
 }
 
+function encodeJudge0Payload(value) {
+  return Buffer.from(String(value ?? ""), "utf8").toString("base64");
+}
+
+function decodeJudge0Field(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const text = String(value);
+
+  try {
+    return Buffer.from(text, "base64").toString("utf8").replace(/\u0000+$/g, "");
+  } catch (error) {
+    return text;
+  }
+}
+
 function getConfiguredBaseUrl() {
   return normalizeBaseUrl(
     process.env.JUDGE0_BASE_URL || (process.env.JUDGE0_API_KEY ? "https://judge0-ce.p.rapidapi.com" : PUBLIC_JUDGE0_BASE_URL)
@@ -87,17 +105,32 @@ function createJudge0Error(status, code, message, cause) {
   error.status = status;
   error.code = code;
   error.cause = cause;
+  error.response = cause?.response;
+  error.data = cause?.response?.data || cause?.data;
   return error;
 }
 
 function normalizeJudge0Failure(error) {
   const status = error?.response?.status || error?.status;
+  const responseData = error?.response?.data || error?.data || {};
+
+  const enrichMessage = (fallback) => {
+    const parts = [
+      responseData.error,
+      responseData.message,
+      responseData.compile_output,
+      responseData.stderr,
+      fallback
+    ].filter(Boolean);
+
+    return parts.join('\n');
+  };
 
   if (status === 401) {
     return createJudge0Error(
       401,
       "JUDGE0_AUTH_FAILED",
-      "Judge0 authentication failed. Add a valid JUDGE0_API_KEY in .env or use a Judge0 server that does not require RapidAPI.",
+      enrichMessage("Judge0 authentication failed. Add a valid JUDGE0_API_KEY in .env or use a Judge0 server that does not require RapidAPI."),
       error
     );
   }
@@ -106,7 +139,7 @@ function normalizeJudge0Failure(error) {
     return createJudge0Error(
       403,
       "JUDGE0_FORBIDDEN",
-      "Judge0 access forbidden. Check that your RapidAPI key is subscribed to Judge0 CE, the quota is available, and JUDGE0_API_HOST matches the selected Judge0 API.",
+      enrichMessage("Judge0 access forbidden. Check that your RapidAPI key is subscribed to Judge0 CE, the quota is available, and JUDGE0_API_HOST matches the selected Judge0 API."),
       error
     );
   }
@@ -115,7 +148,7 @@ function normalizeJudge0Failure(error) {
     return createJudge0Error(
       429,
       "JUDGE0_RATE_LIMITED",
-      "Judge0 is temporarily rate limited. Please try submitting again in a moment.",
+      enrichMessage("Judge0 is temporarily rate limited. Please try submitting again in a moment."),
       error
     );
   }
@@ -124,7 +157,16 @@ function normalizeJudge0Failure(error) {
     return createJudge0Error(
       503,
       "JUDGE0_QUEUE_FULL",
-      "Judge0 queue is busy right now. Please try submitting again in a moment.",
+      enrichMessage("Judge0 queue is busy right now. Please try submitting again in a moment."),
+      error
+    );
+  }
+
+  if (responseData?.compile_output || responseData?.stderr || responseData?.message || responseData?.error) {
+    return createJudge0Error(
+      status || 400,
+      responseData.code || "JUDGE0_EXECUTION_FAILED",
+      enrichMessage("Judge0 execution failed."),
       error
     );
   }
@@ -137,13 +179,13 @@ async function createSingleSubmission(baseUrl, headers, languageId, code, input)
     `${baseUrl}/submissions`,
     {
       language_id: languageId,
-      source_code: code,
-      stdin: input
+      source_code: encodeJudge0Payload(code),
+      stdin: encodeJudge0Payload(input)
     },
     {
       headers,
       params: {
-        base64_encoded: false,
+        base64_encoded: true,
         wait: false
       }
     }
@@ -166,7 +208,7 @@ async function pollSingleSubmission(baseUrl, headers, token) {
       {
         headers,
         params: {
-          base64_encoded: false,
+          base64_encoded: true,
           fields: BATCH_FIELDS
         }
       }
@@ -177,8 +219,11 @@ async function pollSingleSubmission(baseUrl, headers, token) {
 
     if (statusId > 2) {
       return {
-        output: result.stdout || "",
-        error: result.stderr || result.compile_output || result.message || "",
+        output: decodeJudge0Field(result.stdout),
+        error: decodeJudge0Field(result.stderr || result.compile_output || result.message),
+        stderr: decodeJudge0Field(result.stderr),
+        compile_output: decodeJudge0Field(result.compile_output),
+        message: decodeJudge0Field(result.message),
         status: result.status || { id: statusId }
       };
     }
@@ -193,14 +238,14 @@ async function createBatchSubmissions(baseUrl, headers, languageId, code, inputs
     {
       submissions: inputs.map((input) => ({
         language_id: languageId,
-        source_code: code,
-        stdin: input
+        source_code: encodeJudge0Payload(code),
+        stdin: encodeJudge0Payload(input)
       }))
     },
     {
       headers,
       params: {
-        base64_encoded: false
+        base64_encoded: true
       }
     }
   ));
@@ -230,7 +275,7 @@ async function pollBatchSubmissions(baseUrl, headers, tokens) {
         headers,
         params: {
           tokens: tokens.join(","),
-          base64_encoded: false,
+          base64_encoded: true,
           fields: BATCH_FIELDS
         }
       }
@@ -250,8 +295,11 @@ async function pollBatchSubmissions(baseUrl, headers, tokens) {
         const item = byToken.get(token) || {};
         const statusId = Number(item.status_id ?? item.status?.id ?? 0);
         return {
-          output: item.stdout || "",
-          error: item.stderr || item.compile_output || item.message || "",
+          output: decodeJudge0Field(item.stdout),
+          error: decodeJudge0Field(item.stderr || item.compile_output || item.message),
+          stderr: decodeJudge0Field(item.stderr),
+          compile_output: decodeJudge0Field(item.compile_output),
+          message: decodeJudge0Field(item.message),
           status: item.status || { id: statusId }
         };
       });

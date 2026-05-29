@@ -1,8 +1,26 @@
 import api from './api';
 
 export const runCode = async (language, code, input) => {
-  const response = await api.post('/run', { language, code, input });
-  return response.data; // Returns { success, output, error, status }
+  try {
+    const response = await api.post('/run', { language, code, input });
+    return response.data; // { success, output, error, status }
+  } catch (error) {
+    const resp = error?.data || error?.response?.data || {};
+    const payload = typeof resp === 'object' && resp !== null ? resp : {};
+    const errorText = payload.error || payload.message || error?.message || 'Run failed';
+    const stdout = payload.output || payload.stdout || payload.stdout_text || '';
+    const stderr = payload.stderr || payload.compile_output || payload.compileOutput || payload.error || errorText;
+
+    return {
+      success: payload.success === undefined ? false : payload.success,
+      output: stdout,
+      error: stderr,
+      status: payload.status || error?.status || error?.response?.status,
+      code: payload.code || error?.code,
+      message: errorText,
+      raw: payload
+    };
+  }
 };
 
 export const submitCode = async (problemId, language, code) => {

@@ -26,7 +26,13 @@ const request = async (promise, fallbackMessage) => {
     return response.data;
   } catch (error) {
     console.error('[API] error:', error?.config?.method?.toUpperCase(), error?.config?.url, error?.response?.data || error.message);
-    throw new Error(getErrorMessage(error, fallbackMessage), { cause: error });
+    const message = getErrorMessage(error, fallbackMessage);
+    const wrappedError = new Error(message, { cause: error });
+    wrappedError.status = error?.response?.status;
+    wrappedError.code = error?.response?.data?.code || error?.code;
+    wrappedError.response = error?.response;
+    wrappedError.data = error?.response?.data;
+    throw wrappedError;
   }
 };
 

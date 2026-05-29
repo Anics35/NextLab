@@ -73,6 +73,26 @@ const getExamDurationSeconds = (exam) => {
   return duration > 1000 ? duration : duration * 60;
 };
 
+const extractRunMessage = (response, fallback = 'Run failed.') => {
+  if (!response || typeof response !== 'object') return fallback;
+
+  const candidates = [
+    response.output,
+    response.error,
+    response.stderr,
+    response.compile_output,
+    response.compileOutput,
+    response.message,
+    response.raw?.stderr,
+    response.raw?.compile_output,
+    response.raw?.message,
+    response.raw?.error
+  ];
+
+  const resolved = candidates.map((value) => String(value || '').trim()).find((value) => value.length > 0);
+  return resolved || fallback;
+};
+
 function App() {
   const [user, setUser] = useState(() => {
     return getStoredUser();
@@ -404,9 +424,9 @@ function App() {
       }
       const response = await runCode(currentProblemState.language, sourceCode, runtimeInput);
       console.log('[Student] runCode response', response);
-      updateCurrentProblemState({ output: response.output || response.error || 'No output' });
+      updateCurrentProblemState({ output: extractRunMessage(response, 'No output') });
     } catch (error) {
-      const message = error?.message || 'Run failed.';
+      const message = extractRunMessage(error?.response?.data || error?.data || error?.cause?.response?.data || error, error?.message || 'Run failed.');
       updateCurrentProblemState({ output: message });
       toast.error(message);
     } finally {

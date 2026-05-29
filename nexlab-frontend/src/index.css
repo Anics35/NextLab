@@ -1,2 +1,8 @@
 ﻿@import "tailwindcss";
 
+/* Monaco editor error line highlight used by SecureIDE */
+.my-error-line {
+	background-color: rgba(239, 68, 68, 0.12) !important;
+	border-left: 3px solid rgba(239, 68, 68, 0.85) !important;
+}
+

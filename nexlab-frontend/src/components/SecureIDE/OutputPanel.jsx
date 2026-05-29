@@ -1,10 +1,68 @@
 import { TerminalSquare } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-function OutputPanel({ input, setInput, output, result, effectiveLocked, isSubmitting, currentProblem }) {
+function normalizeErrorOutput(text) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+
+  if (/^request failed with status code/i.test(value)) {
+    return 'The code did not compile or run successfully. Check the editor for the exact error line, or review the backend response payload.';
+  }
+
+  return value;
+}
+
+function OutputPanel({ editorRef, input, setInput, output, result, effectiveLocked, isSubmitting, currentProblem }) {
   const isDesignProblem = currentProblem?.problemType === 'design';
   const [terminalInput, setTerminalInput] = useState('');
   const terminalRef = useRef(null);
+  const decorationIdsRef = useRef([]);
+
+  function parseLineNumberFromText(text) {
+    if (!text) return null;
+    // common patterns: at <file>:<line>:<col>, <file>:<line>:<col>, line <line>
+    const patterns = [/at .*:(\d+):\d+/, /:(\d+):\d+/, /line (\d+)/i, /on line (\d+)/i];
+    for (const p of patterns) {
+      const m = String(text).match(p);
+      if (m && m[1]) return Number(m[1]);
+    }
+    return null;
+  }
+
+  function goToEditorLine(line) {
+    const editor = editorRef?.current;
+    if (!editor || !line) return;
+    try {
+      if (typeof editor.revealLineInCenter === 'function') {
+        editor.revealLineInCenter(line);
+      }
+      if (typeof editor.setPosition === 'function') {
+        editor.setPosition({ lineNumber: line, column: 1 });
+      }
+
+      const newDecorations = [
+        {
+          range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+          options: { isWholeLine: true, className: 'my-error-line' }
+        }
+      ];
+
+      decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current || [], newDecorations);
+
+      // remove highlight after a short delay
+      setTimeout(() => {
+        try {
+          if (editor && decorationIdsRef.current && decorationIdsRef.current.length) {
+            decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, []);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 4000);
+    } catch (e) {
+      console.warn('Failed to navigate to editor line', e);
+    }
+  }
 
   useEffect(() => {
     if (!isDesignProblem) {
@@ -19,6 +77,20 @@ function OutputPanel({ input, setInput, output, result, effectiveLocked, isSubmi
     setInput?.(terminalInput);
   };
 
+  useEffect(() => {
+    if (!output) return;
+    const lines = String(output).split('\n');
+    for (const line of lines) {
+      const ln = parseLineNumberFromText(line);
+      if (ln) {
+        goToEditorLine(ln);
+        break;
+      }
+    }
+  }, [output]);
+
+  const displayOutput = normalizeErrorOutput(output);
+
   return (
     <div className="overflow-y-auto bg-[#0a0a0a]" style={{ width: '20%', minWidth: '240px' }}>
       <div className="flex h-full flex-col p-4">
@@ -28,8 +100,8 @@ function OutputPanel({ input, setInput, output, result, effectiveLocked, isSubmi
         {isDesignProblem ? (
           <div className="flex flex-1 flex-col rounded-lg border border-white/10 bg-black/40 p-3 text-xs text-gray-300">
             <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-white/45">Terminal session</div>
-            <pre className={`${String(output).includes('Error') ? 'text-red-400' : 'text-gray-300'} flex-1 whitespace-pre-wrap overflow-auto`}>
-              {output || '> Ready. Click Run to execute your program.'}
+            <pre className={`${String(displayOutput).includes('Error') ? 'text-red-400' : 'text-gray-300'} flex-1 whitespace-pre-wrap overflow-auto`}>
+              {displayOutput || '> Ready. Click Run to execute your program.'}
             </pre>
             <div className="mt-3 flex items-center gap-2 rounded-md border border-white/10 bg-black/50 px-2 py-2">
               <span className="text-emerald-300">$</span>
@@ -68,13 +140,30 @@ function OutputPanel({ input, setInput, output, result, effectiveLocked, isSubmi
           />
         )}
         {!isDesignProblem && (
-          <pre
-            className={`flex-1 overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 text-xs ${
-              String(output).includes('Error') ? 'text-red-400' : 'text-gray-300'
-            }`}
-          >
-            {output || '> Ready for execution'}
-          </pre>
+          <div className={`flex-1 overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 text-xs ${
+              String(displayOutput).includes('Error') ? 'text-red-400' : 'text-gray-300'
+            }`}>
+            {displayOutput ? (
+              displayOutput.split('\n').map((line, idx) => {
+                const lineNumber = parseLineNumberFromText(line);
+                if (lineNumber) {
+                  return (
+                    <div key={idx} className="cursor-pointer hover:underline" onClick={() => goToEditorLine(lineNumber)}>
+                      <span className="text-red-300">{line}</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={idx}>
+                    {line}
+                  </div>
+                );
+              })
+            ) : (
+              <pre className="whitespace-pre-wrap">&gt; Ready for execution</pre>
+            )}
+          </div>
         )}
         {result && !isDesignProblem ? (
           <div className="mt-3 space-y-2">
