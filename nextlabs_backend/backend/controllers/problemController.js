@@ -12,7 +12,7 @@ async function listProblems(req, res, next) {
     }
 
     const problems = await Problem.find(filter)
-      .select("title description difficulty publicTestCases hiddenTestCases testCases createdAt createdBy")
+      .select("title description difficulty problemType publicTestCases hiddenTestCases testCases createdAt createdBy")
       .sort({ createdAt: -1 });
 
     res.json({
