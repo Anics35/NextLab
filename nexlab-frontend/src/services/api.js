@@ -14,6 +14,39 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auto-logout on 401 (session expired / authentication failed)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const code = error?.response?.data?.code;
+
+    // If we get a 401 (unauthorized) it means the token is invalid or session expired.
+    // Auto-logout the user so they don't see repeated "authentication failed" errors.
+    if (status === 401 && (code === 'AUTH_REQUIRED' || code === 'SESSION_EXPIRED' || code === 'USER_NOT_FOUND')) {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      // Only auto-logout if we had a token (avoid logout loop on login page)
+      if (token) {
+        console.warn('[API] Session expired or auth failed. Auto-logging out.');
+        // Clear all auth and page state
+        ['token', 'user'].forEach((key) => { localStorage.removeItem(key); sessionStorage.removeItem(key); });
+        [
+          'nextlab_active_course', 'nextlab_current_exam', 'nextlab_problem_index',
+          'nextlab_teacher_active_tab', 'nextlab_teacher_selected_course',
+          'nextlab_admin_tab', 'nextlab_admin_exam_course'
+        ].forEach((key) => localStorage.removeItem(key));
+        if (window.location.hash) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        window.location.reload();
+        return new Promise(() => {}); // Never resolve — page is reloading
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 const getErrorMessage = (error, fallbackMessage) =>
   error?.response?.data?.error ||
   error?.response?.data?.message ||

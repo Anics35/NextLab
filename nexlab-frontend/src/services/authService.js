@@ -6,7 +6,10 @@ const LOCAL_PAGE_KEYS = [
   'nextlab_active_course',
   'nextlab_current_exam',
   'nextlab_problem_index',
-  'nextlab_teacher_active_tab'
+  'nextlab_teacher_active_tab',
+  'nextlab_teacher_selected_course',
+  'nextlab_admin_tab',
+  'nextlab_admin_exam_course'
 ];
 
 const persistAuth = ({ token, user }) => {
@@ -52,7 +55,9 @@ export const clearPersistentAuthForTabClose = () => {
 };
 
 export const register = async (userData) => {
-  // userData should be { name, email, password, role }
+  // Clear any stale page state from a previous session
+  LOCAL_PAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+
   const response = await api.post('/auth/register', userData);
   if (response.data.token) {
     persistAuth({ token: response.data.token, user: response.data.user });
@@ -61,6 +66,17 @@ export const register = async (userData) => {
 };
 
 export const login = async (email, password) => {
+  // Clear any stale page state from a previous session before logging in
+  [
+    'nextlab_active_course', 'nextlab_current_exam', 'nextlab_problem_index',
+    'nextlab_teacher_active_tab', 'nextlab_teacher_selected_course',
+    'nextlab_admin_tab', 'nextlab_admin_exam_course'
+  ].forEach((key) => localStorage.removeItem(key));
+  // Clear hash-based routing from previous session
+  if (window.location.hash) {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
   const response = await api.post('/auth/login', { email, password });
   if (response.data.token) {
     persistAuth({ token: response.data.token, user: response.data.user });
@@ -81,5 +97,9 @@ export const logout = () => {
   });
   LOCAL_PAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   disconnectSocket(); // Kill the socket connection instantly
+  // Clear hash-based routing (used by teacher Results tab)
+  if (window.location.hash) {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
   window.location.reload(); // Refresh the app to show the login screen
 };
