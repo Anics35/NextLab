@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Clock, X } from 'lucide-react';
+import { Bell, Clock, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 function StudentNotifications({ notifications, onDismiss }) {
@@ -34,49 +34,59 @@ function StudentNotifications({ notifications, onDismiss }) {
   if (!notifications?.length) return null;
 
   return (
-    <div className="fixed right-4 top-20 z-50 flex w-[min(92vw,360px)] flex-col gap-3">
-      {notifications.map((notification) => (
-        <article
-          key={notification.id}
-          className="overflow-hidden rounded-2xl border border-[#f59e0b]/20 bg-[#111]/95 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-        >
-          <div className="flex items-start gap-3 border-b border-white/10 bg-gradient-to-r from-[#f59e0b]/15 to-transparent px-4 py-3">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f59e0b]/15 text-[#fbbf24]">
-              <Bell size={16} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-white">{notification.title || 'Announcement'}</p>
-                  <p className="mt-0.5 text-[11px] text-white/45">From {notification.senderName || 'Teacher'}</p>
-                  {notification.courseTitle && (
-                    <p className="mt-0.5 text-[11px] text-[#fbbf24]">Subject: {notification.courseTitle}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onDismiss?.(notification.id)}
-                  className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white"
-                  aria-label="Dismiss notification"
-                >
-                  <X size={14} />
-                </button>
+    <div className="fixed right-4 top-20 z-50 flex w-[min(92vw,380px)] flex-col gap-3">
+      {notifications.map((notification) => {
+        const timeLeft = timers[notification.id] ?? 0;
+        const isExpiring = timeLeft <= 10;
+
+        return (
+          <article
+            key={notification.id}
+            className="overflow-hidden rounded-2xl border border-amber-500/20 bg-[#111113]/95 shadow-2xl shadow-black/40 backdrop-blur-xl"
+          >
+            {/* Header */}
+            <div className="flex items-start gap-3 border-b border-white/[0.06] bg-gradient-to-r from-amber-500/10 to-transparent px-4 py-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
+                <Bell size={16} />
               </div>
-              <p className="mt-2 text-sm leading-6 text-white/80">{notification.message}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">{notification.title || 'Announcement'}</p>
+                    <p className="mt-0.5 text-[11px] text-white/35">From {notification.senderName || 'Teacher'}</p>
+                    {notification.courseTitle && (
+                      <p className="mt-0.5 text-[11px] text-amber-400/70">{notification.courseTitle}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDismiss?.(notification.id)}
+                    className="shrink-0 rounded-lg p-1 text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+                    aria-label="Dismiss notification"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-white/70">{notification.message}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center justify-between px-4 py-2 text-[11px] text-white/45">
-            <span className="inline-flex items-center gap-1">
-              <AlertTriangle size={12} className="text-[#fbbf24]" />
-              Live message
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Clock size={12} />
-              {timers[notification.id] ? `${timers[notification.id]}s` : '0s'}
-            </span>
-          </div>
-        </article>
-      ))}
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-4 py-2">
+              <span className="inline-flex items-center gap-1.5 text-[10px] text-white/30">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Live
+              </span>
+              <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
+                isExpiring ? 'text-red-400' : 'text-white/30'
+              }`}>
+                <Clock size={10} />
+                {timeLeft > 0 ? `${timeLeft}s` : 'Expiring'}
+              </span>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }

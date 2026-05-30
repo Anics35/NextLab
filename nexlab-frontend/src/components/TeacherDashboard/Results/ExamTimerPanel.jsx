@@ -1,15 +1,11 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Timer } from 'lucide-react';
 
 function ExamTimerPanel({ exam, isExamLiveWindow }) {
   const [timeRemaining, setTimeRemaining] = useState(0);
-
   const serverOffsetRef = useRef(0);
 
   useEffect(() => {
-    // Capture a stable offset between server time and client receipt time when
-    // the exam prop changes. This avoids recomputing offset against the current
-    // Date.now() (which would freeze the timer as explained in comments).
     if (exam?.serverTime) {
       serverOffsetRef.current = new Date(exam.serverTime).getTime() - Date.now();
     } else {
@@ -22,9 +18,6 @@ function ExamTimerPanel({ exam, isExamLiveWindow }) {
       return { status: 'invalid', displayTime: '--:--:--' };
     }
 
-    // Use the stable server offset to compute a running "now" that approximates
-    // the server clock. This lets the timer continue advancing after page reloads
-    // or when the exam object is deserialized from a cached source.
     const now = Date.now() + (serverOffsetRef.current || 0);
     const startTime = new Date(exam.startTime).getTime();
     const endTime = new Date(exam.endTime).getTime();
@@ -59,20 +52,17 @@ function ExamTimerPanel({ exam, isExamLiveWindow }) {
       seconds.toString().padStart(2, '0')
     ].join(':');
 
-    // Determine time status
     let status = 'ongoing';
     if (remainingSeconds <= 300) {
-      status = 'critical'; // Last 5 minutes
+      status = 'critical';
     } else if (remainingSeconds <= 900) {
-      status = 'warning'; // Last 15 minutes
+      status = 'warning';
     }
 
     return { status, displayTime, compactClock, remainingSeconds };
   }, [exam, timeRemaining]);
 
   useEffect(() => {
-    // Keep the timer ticking when we have valid exam timestamps so it can count
-    // down to start, run during the exam, and show remaining time after end.
     if (!exam?.startTime || !exam?.endTime) return;
 
     const interval = setInterval(() => {
@@ -83,54 +73,86 @@ function ExamTimerPanel({ exam, isExamLiveWindow }) {
   }, [exam?.startTime, exam?.endTime]);
 
   const getStatusColor = () => {
-    if (timerInfo.status === 'critical') return 'text-red-500';
-    if (timerInfo.status === 'warning') return 'text-yellow-500';
-    if (timerInfo.status === 'ended') return 'text-gray-500';
-    if (timerInfo.status === 'not_started') return 'text-gray-500';
-    return 'text-green-500';
+    if (timerInfo.status === 'critical') return 'text-red-400';
+    if (timerInfo.status === 'warning') return 'text-amber-400';
+    if (timerInfo.status === 'ended') return 'text-white/30';
+    if (timerInfo.status === 'not_started') return 'text-white/30';
+    return 'text-emerald-400';
   };
 
-  const getBackgroundColor = () => {
-    if (timerInfo.status === 'critical') return 'bg-red-500 bg-opacity-10 border-red-500';
-    if (timerInfo.status === 'warning') return 'bg-yellow-500 bg-opacity-10 border-yellow-500';
-    if (timerInfo.status === 'ended') return 'bg-gray-500 bg-opacity-10 border-gray-500';
-    if (timerInfo.status === 'not_started') return 'bg-gray-500 bg-opacity-10 border-gray-500';
-    return 'bg-green-500 bg-opacity-10 border-green-500';
+  const getBorderColor = () => {
+    if (timerInfo.status === 'critical') return 'border-red-500/20';
+    if (timerInfo.status === 'warning') return 'border-amber-500/20';
+    if (timerInfo.status === 'ended') return 'border-white/[0.06]';
+    if (timerInfo.status === 'not_started') return 'border-white/[0.06]';
+    return 'border-emerald-500/20';
+  };
+
+  const getBgColor = () => {
+    if (timerInfo.status === 'critical') return 'bg-red-500/5';
+    if (timerInfo.status === 'warning') return 'bg-amber-500/5';
+    if (timerInfo.status === 'ended') return 'bg-white/[0.02]';
+    if (timerInfo.status === 'not_started') return 'bg-white/[0.02]';
+    return 'bg-emerald-500/5';
+  };
+
+  const getIconBg = () => {
+    if (timerInfo.status === 'critical') return 'bg-red-500/10 text-red-400';
+    if (timerInfo.status === 'warning') return 'bg-amber-500/10 text-amber-400';
+    if (timerInfo.status === 'ended') return 'bg-white/[0.04] text-white/30';
+    if (timerInfo.status === 'not_started') return 'bg-white/[0.04] text-white/30';
+    return 'bg-emerald-500/10 text-emerald-400';
+  };
+
+  const getStatusLabel = () => {
+    if (timerInfo.status === 'critical') return 'Critical';
+    if (timerInfo.status === 'warning') return 'Warning';
+    if (timerInfo.status === 'ongoing') return 'Running';
+    if (timerInfo.status === 'ended') return 'Ended';
+    if (timerInfo.status === 'not_started') return 'Waiting';
+    return 'Unknown';
+  };
+
+  const getStatusMessage = () => {
+    if (timerInfo.status === 'critical') return 'Final minutes — monitor submissions closely.';
+    if (timerInfo.status === 'warning') return 'Time is running down.';
+    if (timerInfo.status === 'ongoing') return 'Exam in progress.';
+    if (timerInfo.status === 'ended') return 'Session closed.';
+    if (timerInfo.status === 'not_started') return 'Waiting for the exam to begin.';
+    return 'Timer not available.';
   };
 
   return (
-    <div className={`overflow-hidden rounded-2xl border p-0 ${getBackgroundColor()}`}>
-      <div className="flex items-center gap-4 bg-black/20 px-5 py-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${getBackgroundColor()} bg-black/30`}>
-          <Clock className={`h-6 w-6 ${getStatusColor()}`} />
+    <div className={`overflow-hidden rounded-2xl border ${getBorderColor()} ${getBgColor()}`}>
+      <div className="flex items-center gap-4 px-5 py-4">
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${getIconBg()}`}>
+          {timerInfo.status === 'critical' ? <Timer size={22} /> : <Clock size={22} />}
         </div>
-        <div className="flex-1">
-          <p className="text-xs uppercase tracking-[0.24em] text-gray-500">Exam Timer</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">Exam Timer</p>
           <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
-            <p className={`text-3xl font-semibold tabular-nums ${getStatusColor()}`}>
-              {timerInfo.displayTime}
+            <p className={`text-2xl font-bold tabular-nums ${getStatusColor()}`}>
+              {timerInfo.compactClock || timerInfo.displayTime}
             </p>
-            {timerInfo.compactClock ? <p className="pb-1 text-sm text-gray-400">{timerInfo.compactClock}</p> : null}
+            {timerInfo.compactClock && (
+              <p className="pb-0.5 text-xs text-white/30">{timerInfo.displayTime}</p>
+            )}
           </div>
-          <p className="mt-1 text-sm text-gray-400">
-            {timerInfo.status === 'critical' && 'Final minutes. Keep attention on submissions.'}
-            {timerInfo.status === 'warning' && 'Time is running down.'}
-            {timerInfo.status === 'ongoing' && 'Live exam in progress.'}
-            {timerInfo.status === 'ended' && 'Session closed.'}
-            {timerInfo.status === 'not_started' && 'Waiting for the exam to begin.'}
-            {timerInfo.status === 'invalid' && 'Timer not available.'}
-          </p>
+          <p className="mt-1 text-xs text-white/35">{getStatusMessage()}</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-[0.24em] text-gray-500">State</p>
-          <p className={`mt-1 text-sm font-semibold ${getStatusColor()}`}>
-            {timerInfo.status === 'critical' && 'Critical'}
-            {timerInfo.status === 'warning' && 'Warning'}
-            {timerInfo.status === 'ongoing' && 'Running'}
-            {timerInfo.status === 'ended' && 'Ended'}
-            {timerInfo.status === 'not_started' && 'Waiting'}
-            {timerInfo.status === 'invalid' && 'Invalid'}
-          </p>
+        <div className="text-right shrink-0">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">State</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            {timerInfo.status === 'ongoing' && (
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+            {timerInfo.status === 'critical' && (
+              <span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />
+            )}
+            <p className={`text-sm font-semibold ${getStatusColor()}`}>
+              {getStatusLabel()}
+            </p>
+          </div>
         </div>
       </div>
     </div>

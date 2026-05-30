@@ -1,5 +1,5 @@
 import { Editor } from '@monaco-editor/react';
-import { LoaderCircle, Play, Save, Maximize2, Minimize2, X } from 'lucide-react';
+import { CheckCircle2, Code2, FileText, LoaderCircle, Maximize2, Minimize2, Play, Save, X, XCircle } from 'lucide-react';
 import { runCode } from '../../../services/codeService';
 import { toast } from 'react-hot-toast';
 import { useEffect, useRef, useState } from 'react';
@@ -84,8 +84,8 @@ function SubmissionReview({
   };
 
   const publicRunLabel = teacherRunResult
-    ? `Public ${teacherRunResult.passedPublic || 0}/${teacherRunResult.totalPublic || 0}`
-    : 'Public -/-';
+    ? `${teacherRunResult.passedPublic || 0}/${teacherRunResult.totalPublic || 0} passed`
+    : '—';
   const normalizedProblemType = String(selectedProblem?.problemId?.problemType || selectedProblem?.problemType || '').trim().toLowerCase();
   const hasNoTestcaseResults = Number(selectedProblem?.totalPublic || 0) === 0 && Number(selectedProblem?.totalHidden || 0) === 0;
   const isDesignProblem = normalizedProblemType === 'design' || normalizedProblemType === 'designproblem' || hasNoTestcaseResults;
@@ -114,259 +114,329 @@ function SubmissionReview({
     }
   };
 
+  const storedTestCases = [
+    ...(selectedProblem?.problemId?.publicTestCases || []),
+    ...(selectedProblem?.problemId?.testCases || [])
+      .filter((tc) => tc.isPublic)
+      .map((tc) => ({ input: tc.input, output: tc.expectedOutput }))
+  ];
+
   return (
     <>
-      <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4">
-      <p className="mb-4">Submission Details</p>
-      {!selectedStudent && <p className="text-gray-400">Select a student.</p>}
-      {attemptLoading && <p className="text-gray-400">Loading attempt...</p>}
+      <div className="rounded-2xl border border-white/[0.06] bg-[#111113] p-4">
+        {/* Header */}
+        <div className="mb-4 flex items-center gap-2">
+          <FileText size={14} className="text-indigo-400" />
+          <p className="text-sm font-semibold text-white/70">Review</p>
+        </div>
 
-      {selectedStudent ? (
-        <div className="flex flex-col gap-4 max-h-96 overflow-y-auto">
-          {/* Problem Selector */}
-          <div className="flex flex-wrap gap-2">
-            {reviewProblems.map((problem, index) => (
-              <button
-                key={`${selectedSubmission?._id}-problem-${index}`}
-                type="button"
-                onClick={() => setActiveProblemIndex(index)}
-                className={`rounded-full border px-3 py-1 text-xs ${
-                  activeProblemIndex === index
-                    ? 'border-[#ffa116] bg-[#ffa116] text-black'
-                    : 'border-gray-700 bg-[#0a0a0a] text-white'
-                }`}
-              >
-                Problem {index + 1}
-              </button>
-            ))}
+        {/* Empty state */}
+        {!selectedStudent && (
+          <p className="py-12 text-center text-xs text-white/30">Select a student to review their submission.</p>
+        )}
+        {attemptLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
           </div>
+        )}
 
-          {/* Problem Summary */}
-          {reviewProblems.map((problem, index) => (
-            <button
-              key={`${selectedSubmission?._id}-summary-${index}`}
-              type="button"
-              onClick={() => setActiveProblemIndex(index)}
-              className={`bg-[#111] border border-gray-800 rounded-md p-3 text-left ${
-                activeProblemIndex === index ? 'ring-1 ring-[#ffa116]' : ''
-              }`}
-            >
-              <p className="font-medium mb-2">
-                Problem {index + 1}: {problem.problemId?.title || 'Problem'}
-              </p>
-              <p className="text-sm text-gray-300">
-                Public {problem.passedPublic}/{problem.totalPublic} · Hidden {problem.passedHidden}/{problem.totalHidden}
-              </p>
-            </button>
-          ))}
-
-          {/* Selected Problem Details */}
-          {selectedProblem ? (
-            <div className="bg-[#111] border border-gray-800 rounded-md p-3">
-              <p className="font-medium mb-4">{selectedProblem.problemId?.title || 'Problem'}</p>
-              <p className="text-sm text-gray-300 mb-4">Score: {selectedProblem.score ?? 0}</p>
-
-              <div className="flex items-center gap-4 mb-4">
-                <input
-                  className="w-24 bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-white"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    scoreDrafts[`${selectedSubmission._id}_${selectedProblem.problemId?._id || selectedProblem.problemId}`] ??
-                    selectedProblem.score ??
-                    0
-                  }
-                  onChange={(e) =>
-                    setScoreDrafts((prev) => ({
-                      ...prev,
-                      [`${selectedSubmission._id}_${selectedProblem.problemId?._id || selectedProblem.problemId}`]:
-                        e.target.value
-                    }))
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    onOverrideScore(selectedSubmission._id, selectedProblem.problemId?._id || selectedProblem.problemId)
-                  }
-                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 inline-flex items-center gap-2"
-                >
-                  <Save size={14} />
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={openFullscreenRunner}
-                  className="bg-[#ffa116] text-black px-4 py-2 rounded-md hover:bg-orange-500"
-                >
-                  Fullscreen
-                </button>
+        {selectedStudent && !attemptLoading ? (
+          <div className="flex flex-col gap-4 max-h-[480px] overflow-y-auto pr-1">
+            {/* Problem Tabs */}
+            {reviewProblems.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {reviewProblems.map((_p, index) => (
+                  <button
+                    key={`${selectedSubmission?._id}-tab-${index}`}
+                    type="button"
+                    onClick={() => setActiveProblemIndex(index)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      activeProblemIndex === index
+                        ? 'bg-amber-500/15 text-amber-400 shadow-sm'
+                        : 'bg-white/[0.03] text-white/40 hover:bg-white/[0.06] hover:text-white/60'
+                    }`}
+                  >
+                    P{index + 1}
+                  </button>
+                ))}
               </div>
+            )}
 
-              <div className="h-56 overflow-hidden rounded-md border border-gray-800 bg-black">
-                <Editor
-                  height="100%"
-                  language={selectedProblem.language || 'javascript'}
-                  value={selectedProblem.code || '// No code submitted'}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    fontFamily: "'Fira Code', 'Courier New', monospace",
-                    scrollBeyondLastLine: false
-                  }}
-                  theme="vs-dark"
-                />
-              </div>
+            {/* Problem Summary Cards */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {reviewProblems.map((problem, index) => (
+                <button
+                  key={`${selectedSubmission?._id}-summary-${index}`}
+                  type="button"
+                  onClick={() => setActiveProblemIndex(index)}
+                  className={`rounded-xl border p-3 text-left transition-all ${
+                    activeProblemIndex === index
+                      ? 'border-amber-500/20 bg-amber-500/5'
+                      : 'border-white/[0.04] bg-white/[0.02] hover:border-white/[0.08]'
+                  }`}
+                >
+                  <p className="text-xs font-medium text-white truncate">
+                    {problem.problemId?.title || `Problem ${index + 1}`}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
+                      <CheckCircle2 size={10} /> {problem.passedPublic}/{problem.totalPublic}
+                    </span>
+                    <span className="text-[10px] text-white/20">·</span>
+                    <span className="text-[10px] text-white/35">
+                      Hidden {problem.passedHidden}/{problem.totalHidden}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
 
-              {/* Teacher Run */}
-              <div className="mt-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-sm text-gray-300">Teacher Run Input</p>
-                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-                    {publicRunLabel}
-                  </span>
+            {/* Selected Problem Detail */}
+            {selectedProblem && (
+              <div className="space-y-4">
+                {/* Score & Actions */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h4 className="text-sm font-semibold text-white truncate">
+                      {selectedProblem.problemId?.title || 'Problem'}
+                    </h4>
+                    <span className="shrink-0 rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                      {selectedProblem.language || 'unknown'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <p className="text-[10px] text-white/30 mb-1">Score</p>
+                      <input
+                        className="w-20 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-sm text-white outline-none focus:border-amber-500/40"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          scoreDrafts[`${selectedSubmission._id}_${selectedProblem.problemId?._id || selectedProblem.problemId}`] ??
+                          selectedProblem.score ??
+                          0
+                        }
+                        onChange={(e) =>
+                          setScoreDrafts((prev) => ({
+                            ...prev,
+                            [`${selectedSubmission._id}_${selectedProblem.problemId?._id || selectedProblem.problemId}`]: e.target.value
+                          }))
+                        }
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOverrideScore(selectedSubmission._id, selectedProblem.problemId?._id || selectedProblem.problemId)
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+                    >
+                      <Save size={12} />
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openFullscreenRunner}
+                      className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20"
+                    >
+                      <Maximize2 size={12} />
+                      Expand
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  className="w-full p-2 bg-black border border-gray-800 rounded-md text-sm text-white mb-3"
-                  value={teacherInput}
-                  onChange={(event) => setTeacherInput(event.target.value)}
-                  placeholder="Enter input"
-                  rows={4}
-                />
-                <button
-                  type="button"
-                  onClick={handleTeacherRunCode}
-                  disabled={isTeacherRunning}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 inline-flex items-center gap-2"
-                >
-                  {isTeacherRunning ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
-                  {isTeacherRunning ? 'Running...' : 'Run Code'}
-                </button>
-                <pre className="mt-3 bg-black/40 border border-gray-800 rounded-md p-3 text-xs text-gray-300 overflow-auto whitespace-pre-wrap max-h-32">
-                  {teacherOutput || 'No output'}
-                </pre>
-                {teacherRunResult?.details?.length ? (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {teacherRunResult.details.map((detail, index) => (
-                      <div
-                        key={`${selectedSubmission._id}-teacher-run-${index}`}
-                        className={`rounded-md border p-2 text-xs ${
-                          detail.passed ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'
-                        }`}
-                      >
-                        Public {index + 1}: {detail.passed ? 'Pass' : 'Fail'}
-                      </div>
-                    ))}
+
+                {/* Code Editor */}
+                <div className="h-52 overflow-hidden rounded-xl border border-white/[0.06] bg-black">
+                  <Editor
+                    height="100%"
+                    language={selectedProblem.language || 'javascript'}
+                    value={selectedProblem.code || '// No code submitted'}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      fontFamily: "'Fira Code', 'Courier New', monospace",
+                      scrollBeyondLastLine: false
+                    }}
+                    theme="vs-dark"
+                  />
+                </div>
+
+                {/* Teacher Run */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Run Code</p>
+                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                      {publicRunLabel}
+                    </span>
+                  </div>
+                  <textarea
+                    className="w-full rounded-lg border border-white/[0.06] bg-black/40 p-3 text-xs text-white placeholder-white/20 outline-none focus:border-amber-500/30 resize-none"
+                    value={teacherInput}
+                    onChange={(event) => setTeacherInput(event.target.value)}
+                    placeholder="Enter custom input..."
+                    rows={3}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTeacherRunCode}
+                    disabled={isTeacherRunning}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {isTeacherRunning ? <LoaderCircle size={12} className="animate-spin" /> : <Play size={12} />}
+                    {isTeacherRunning ? 'Running...' : 'Run'}
+                  </button>
+                  {teacherOutput && (
+                    <pre className="mt-3 max-h-28 overflow-auto rounded-lg border border-white/[0.04] bg-black/30 p-3 text-[11px] text-white/60 whitespace-pre-wrap font-mono">
+                      {teacherOutput}
+                    </pre>
+                  )}
+                  {teacherRunResult?.details?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {teacherRunResult.details.map((detail, index) => (
+                        <span
+                          key={`${selectedSubmission._id}-run-${index}`}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] ${
+                            detail.passed
+                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                              : 'border-red-500/20 bg-red-500/10 text-red-300'
+                          }`}
+                        >
+                          {detail.passed ? <CheckCircle2 size={9} /> : <XCircle size={9} />}
+                          TC {index + 1}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Test Results */}
+                {(selectedProblem.testResults || []).length > 0 && (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Test Results</p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {selectedProblem.testResults.map((detail, index) => (
+                        <div
+                          key={`${selectedSubmission._id}-detail-${index}`}
+                          className={`rounded-lg border p-3 text-[11px] ${
+                            detail.passed
+                              ? 'border-emerald-500/15 bg-emerald-500/5'
+                              : 'border-red-500/15 bg-red-500/5'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-medium text-white/60">Test {index + 1}</span>
+                            <span className={`inline-flex items-center gap-1 ${detail.passed ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {detail.passed ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                              {detail.passed ? 'Pass' : 'Fail'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-white/40">
+                            <div>
+                              <p className="text-[9px] text-white/25 mb-0.5">Input</p>
+                              <p className="font-mono truncate">{detail.input || '(empty)'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-white/25 mb-0.5">Expected</p>
+                              <p className="font-mono truncate">{detail.expected || '(empty)'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-white/25 mb-0.5">Output</p>
+                              <p className="font-mono truncate">{detail.output || detail.error || '(empty)'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stored Test Cases */}
+                {storedTestCases.length > 0 && (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Stored Test Cases</p>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {storedTestCases.map((testCase, index) => (
+                        <div
+                          key={`${selectedSubmission._id}-stored-${index}`}
+                          className="rounded-lg border border-white/[0.04] bg-black/20 p-2.5 text-[11px]"
+                        >
+                          <div className="grid grid-cols-2 gap-3 text-white/40">
+                            <div>
+                              <p className="text-[9px] text-white/25 mb-0.5">Input</p>
+                              <p className="font-mono">{testCase.input || '(empty)'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-white/25 mb-0.5">Expected</p>
+                              <p className="font-mono">{testCase.output || '(empty)'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attempt Summary */}
+                {studentAttempt?.answers?.length ? (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Attempt Summary</p>
+                    <div className="space-y-1.5">
+                      {studentAttempt.answers.map((answer, idx) => (
+                        <div key={`${answer.problemId}-${idx}`} className="flex items-center justify-between rounded-lg bg-black/20 px-3 py-2">
+                          <span className="text-xs text-white/50">Problem {idx + 1}</span>
+                          <span className="text-xs font-semibold text-white">
+                            {answer.finalScore ?? answer.score ?? 0} <span className="text-white/30">/ {answer.marks ?? 0}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>
-
-              {/* Test Results */}
-              <div className="mt-4">
-                <p className="mb-2 text-sm text-gray-300">Test Case Checks</p>
-                <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
-                  {(selectedProblem.testResults || []).length === 0 ? (
-                    <p className="text-xs text-gray-400">No testcase details available.</p>
-                  ) : null}
-                  {(selectedProblem.testResults || []).map((detail, index) => (
-                    <div
-                      key={`${selectedSubmission._id}-detail-${index}`}
-                      className="rounded-md border border-gray-800 bg-black/30 p-3 text-xs text-gray-300"
-                    >
-                      <p>Input: {detail.input || '(empty)'}</p>
-                      <p>Expected: {detail.expected || '(empty)'}</p>
-                      <p>Output: {detail.output || detail.error || '(empty)'}</p>
-                      <p>Status: {detail.passed ? 'Pass' : 'Fail'}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stored Test Cases */}
-              <div className="mt-4">
-                <p className="mb-2 text-sm text-gray-300">Stored Test Cases</p>
-                <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
-                  {[
-                    ...(selectedProblem.problemId?.publicTestCases || []),
-                    ...(selectedProblem.problemId?.testCases || [])
-                      .filter((testCase) => testCase.isPublic)
-                      .map((testCase) => ({ input: testCase.input, output: testCase.expectedOutput }))
-                  ].length === 0 ? (
-                    <p className="text-xs text-gray-400">No public test cases available.</p>
-                  ) : null}
-                  {[
-                    ...(selectedProblem.problemId?.publicTestCases || []),
-                    ...(selectedProblem.problemId?.testCases || [])
-                      .filter((testCase) => testCase.isPublic)
-                      .map((testCase) => ({ input: testCase.input, output: testCase.expectedOutput }))
-                  ].map((testCase, index) => (
-                    <div
-                      key={`${selectedSubmission._id}-stored-${index}`}
-                      className="rounded-md border border-gray-800 bg-black/30 p-3 text-xs text-gray-300"
-                    >
-                      <p>Input: {testCase.input || '(empty)'}</p>
-                      <p>Expected: {testCase.output || '(empty)'}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Attempt Summary */}
-              {studentAttempt?.answers?.length ? (
-                <div className="bg-[#111] border border-gray-800 rounded-md p-3 mt-4">
-                  <p className="mb-4 font-medium">Attempt Summary</p>
-                  <div className="flex flex-col gap-4">
-                    {studentAttempt.answers.map((answer, idx) => (
-                      <p key={`${answer.problemId}-${idx}`} className="text-sm text-gray-300">
-                        Problem {idx + 1}: {answer.finalScore ?? answer.score ?? 0} / {answer.marks ?? 0}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       {/* Code Fullscreen Modal */}
       {isCodeModalOpen && selectedProblem && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div ref={modalRef} className={`bg-[#0a0a0a] border border-gray-800 rounded-xl flex flex-col ${
-            isModalFullscreen ? 'w-screen h-screen' : 'w-full h-[90vh] max-w-6xl'
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div ref={modalRef} className={`flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0a0a] shadow-2xl ${
+            isModalFullscreen ? 'h-screen w-screen' : 'h-[90vh] w-full max-w-6xl'
           }`}>
             {/* Modal Header */}
-            <div className="border-b border-gray-800 p-4 flex items-center justify-between bg-[#111]">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <div>
-                <h3 className="font-semibold text-white">{selectedProblem.problemId?.title || 'Code Submission'}</h3>
-                <p className="text-xs text-gray-400">{selectedProblem.language}</p>
+                <h3 className="text-sm font-bold text-white">{selectedProblem.problemId?.title || 'Code Submission'}</h3>
+                <p className="mt-0.5 text-[11px] text-white/35">{selectedProblem.language} · Read-only</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleModalFullscreen}
-                  className="p-2 rounded-lg border border-white/15 bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-2 text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white/80"
                   title={isModalFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
                 >
-                  {isModalFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  {isModalFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                 </button>
                 <button
                   type="button"
                   onClick={closeFullscreenRunner}
-                  className="p-2 rounded-lg border border-gray-700/50 bg-gray-700/20 text-white/70 hover:bg-gray-700/40 transition-colors"
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-2 text-white/50 transition-colors hover:bg-red-500/10 hover:text-red-400"
                   title="Close"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
             </div>
 
             {/* Modal Content */}
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4 overflow-hidden p-4">
-              <div className="min-h-0 overflow-hidden rounded-md border border-gray-800 bg-black">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-0 overflow-hidden">
+              {/* Code Panel */}
+              <div className="min-h-0 overflow-hidden border-r border-white/[0.06]">
                 <Editor
                   height="100%"
                   language={selectedProblem.language || 'javascript'}
@@ -377,10 +447,13 @@ function SubmissionReview({
                     fontSize: 13,
                     fontFamily: "'Fira Code', 'Courier New', monospace",
                     scrollBeyondLastLine: false,
+                    padding: { top: 16 }
                   }}
                   theme="vs-dark"
                 />
               </div>
+
+              {/* Run Panel */}
               {isDesignProblem ? (
                 <DesignTerminal
                   code={selectedProblem.code || ''}
@@ -390,42 +463,45 @@ function SubmissionReview({
                   className="h-full"
                 />
               ) : (
-                <div className="flex min-h-0 flex-col rounded-md border border-gray-800 bg-black/40 p-3">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">Teacher Run</p>
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                <div className="flex min-h-0 flex-col p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Teacher Run</p>
+                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium text-emerald-300">
                       {publicRunLabel}
                     </span>
                   </div>
                   <textarea
-                    className="min-h-28 w-full resize-y rounded-md border border-gray-800 bg-black p-2 text-sm text-white outline-none"
+                    className="min-h-24 w-full resize-y rounded-xl border border-white/[0.06] bg-black/40 p-3 text-xs text-white placeholder-white/20 outline-none focus:border-amber-500/30"
                     value={teacherInput}
                     onChange={(event) => setTeacherInput(event.target.value)}
-                    placeholder="Enter input"
+                    placeholder="Enter input..."
                   />
                   <button
                     type="button"
                     onClick={handleTeacherRunCode}
                     disabled={isTeacherRunning}
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {isTeacherRunning ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
                     {isTeacherRunning ? 'Running...' : 'Run Code'}
                   </button>
-                  <pre className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-gray-800 bg-black p-3 text-xs text-gray-300 whitespace-pre-wrap">
-                    {teacherOutput || 'No output'}
+                  <pre className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl border border-white/[0.04] bg-black/30 p-3 text-[11px] text-white/50 whitespace-pre-wrap font-mono">
+                    {teacherOutput || 'Output will appear here...'}
                   </pre>
                   {teacherRunResult?.details?.length ? (
-                    <div className="mt-3 max-h-40 overflow-y-auto space-y-2">
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {teacherRunResult.details.map((detail, index) => (
-                        <div
+                        <span
                           key={`${selectedSubmission._id}-modal-run-${index}`}
-                          className={`rounded-md border p-2 text-xs ${
-                            detail.passed ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] ${
+                            detail.passed
+                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                              : 'border-red-500/20 bg-red-500/10 text-red-300'
                           }`}
                         >
-                          Public {index + 1}: {detail.passed ? 'Pass' : 'Fail'}
-                        </div>
+                          {detail.passed ? <CheckCircle2 size={9} /> : <XCircle size={9} />}
+                          TC {index + 1}
+                        </span>
                       ))}
                     </div>
                   ) : null}

@@ -3,7 +3,6 @@ import { toast } from 'react-hot-toast';
 import { ArrowLeft, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FileSpreadsheet, LoaderCircle, X, Share2 } from 'lucide-react';
 import { updateExam, getStudentAttempt, getSubmissionsByExam, overrideSubmissionScore, getExamAnalytics, deleteExam, downloadExamReportPdf, downloadExamReportXlsx } from '../../../services/api';
 import { getAuthToken } from '../../../services/authService';
-import { cardClass } from '../constants';
 import LiveStudentListPanel from './LiveStudentListPanel';
 import StudentListPanel from './StudentListPanel';
 import SubmissionReview from './SubmissionReview';
@@ -574,12 +573,15 @@ function ResultsTab({
   const goToExams = () => setResultHash(`${RESULT_BASE_HASH}/course/${encodeURIComponent(route.courseId || selectedCourseId)}`);
 
   return (
-    <section className={cardClass}>
+    <section className="space-y-6">
       {route.page === 'courses' ? (
         <>
-          <h2 className="text-lg font-semibold mb-4">Results</h2>
+          <div>
+            <h2 className="text-xl font-bold text-white">Results</h2>
+            <p className="mt-1 text-sm text-white/40">Select a course to view exam results.</p>
+          </div>
           {courses.length === 0 ? (
-            <p className="text-sm text-gray-400">No courses found.</p>
+            <p className="py-12 text-center text-sm text-white/30">No courses found.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {courses.map((course) => (
@@ -587,11 +589,11 @@ function ResultsTab({
                   key={course._id}
                   type="button"
                   onClick={() => openCourse(course._id)}
-                  className="rounded-lg border border-gray-800 bg-[#0a0a0a] p-4 text-left transition-colors hover:border-[#ffa116] hover:bg-[#141414]"
+                  className="group rounded-2xl border border-white/[0.06] bg-[#111113] p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/20 hover:shadow-lg hover:shadow-black/20"
                 >
-                  <p className="font-medium text-white">{course.title}</p>
-                  <p className="mt-1 text-xs text-gray-400">{course.courseCode || 'No course code'}</p>
-                  {course.description ? <p className="mt-3 line-clamp-2 text-sm text-gray-300">{course.description}</p> : null}
+                  <p className="font-semibold text-white group-hover:text-amber-400 transition-colors">{course.title}</p>
+                  <p className="mt-1 text-xs text-white/35 font-mono">{course.courseCode || 'No code'}</p>
+                  {course.description && <p className="mt-3 line-clamp-2 text-sm text-white/40">{course.description}</p>}
                 </button>
               ))}
             </div>
@@ -601,28 +603,28 @@ function ResultsTab({
 
       {route.page === 'exams' ? (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <button type="button" onClick={goToCourses} className="mb-2 inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white">
-                <ArrowLeft size={14} /> Courses
+              <button type="button" onClick={goToCourses} className="mb-2 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white transition-colors">
+                <ArrowLeft size={14} /> Back to Courses
               </button>
-              <h2 className="text-lg font-semibold">{selectedCourse?.title || 'Course Exams'}</h2>
+              <h2 className="text-xl font-bold text-white">{selectedCourse?.title || 'Course Exams'}</h2>
+              <p className="mt-1 text-sm text-white/40">Select an exam to view submissions and results.</p>
             </div>
           </div>
           {courseExams.length === 0 ? (
-            <p className="text-sm text-gray-400">No exams found for this course.</p>
+            <p className="py-12 text-center text-sm text-white/30">No exams found for this course.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {courseExams.map((exam) => (
-                <div key={exam._id} className="relative">
+                <div key={exam._id} className="relative group">
                   <button
                     type="button"
                     onClick={() => openExam(exam._id)}
-                    className="w-full text-left rounded-lg border border-gray-800 bg-[#0a0a0a] p-4 transition-colors hover:border-[#ffa116] hover:bg-[#141414]"
+                    className="w-full text-left rounded-2xl border border-white/[0.06] bg-[#111113] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/20 hover:shadow-lg hover:shadow-black/20"
                   >
-                    <p className="font-medium text-white">{exam.title}</p>
-                    <p className="mt-2 text-xs text-gray-400">{exam.problems?.length || 0} problems</p>
-                    <p className="mt-1 text-xs text-gray-400">Duration: {exam.totalDuration || exam.duration || 0} min</p>
+                    <p className="font-semibold text-white group-hover:text-amber-400 transition-colors">{exam.title}</p>
+                    <p className="mt-2 text-xs text-white/35">{exam.problems?.length || 0} problems · {exam.totalDuration || exam.duration || 0} min</p>
                   </button>
                   <button
                     type="button"
@@ -632,7 +634,7 @@ function ResultsTab({
                       setShowDeleteConfirm(true);
                     }}
                     aria-label="Delete exam"
-                    className="absolute top-2 right-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-red-600 text-gray-400 hover:text-white p-1"
+                    className="absolute top-3 right-3 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-transparent text-white/20 hover:bg-red-500/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <X size={14} />
                   </button>
@@ -645,13 +647,13 @@ function ResultsTab({
 
       {route.page === 'students' ? (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <button type="button" onClick={goToExams} className="mb-2 inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white">
-                <ArrowLeft size={14} /> Exams
+              <button type="button" onClick={goToExams} className="mb-2 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white transition-colors">
+                <ArrowLeft size={14} /> Back to Exams
               </button>
-              <h2 className="text-lg font-semibold">{selectedExam?.title || 'Exam Students'}</h2>
-              <p className="mt-1 text-sm text-gray-400">{selectedCourse?.title || 'Selected course'}</p>
+              <h2 className="text-xl font-bold text-white">{selectedExam?.title || 'Exam Students'}</h2>
+              <p className="mt-1 text-sm text-white/40">{selectedCourse?.title || 'Selected course'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isExamRunning ? (
@@ -665,13 +667,13 @@ function ResultsTab({
                       type="button"
                       onClick={handleStopExam}
                       disabled={isFinalizingMarks || !route.examId}
-                      className="inline-flex min-w-30 items-center justify-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                      className="inline-flex min-w-30 items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
                     >
                       {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
                       Stop Exam
                     </button>
                   ) : (
-                    <div className="inline-flex min-w-30 items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
+                    <div className="inline-flex min-w-30 items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
                       <span className="uppercase tracking-[0.22em] text-[10px] text-red-300/80">Timer</span>
                       <span className="tabular-nums">{teacherTimerInfo?.label || '-- sec'}</span>
                       {teacherTimerInfo?.compactClock ? <span className="text-xs text-red-200/70">{teacherTimerInfo.compactClock}</span> : null}
@@ -679,19 +681,15 @@ function ResultsTab({
                   )}
                 </div>
               ) : isExamEnded ? (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-white opacity-60"
-                >
+                <span className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white/40">
                   Exam Ended
-                </button>
+                </span>
               ) : (
                 <button
                   type="button"
                   onClick={handleStartExam}
                   disabled={isFinalizingMarks || !route.examId}
-                  className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : null}
                   Start Exam
@@ -701,67 +699,59 @@ function ResultsTab({
                 type="button"
                 onClick={() => handleToggleResultVisibility(!showMarksImmediately)}
                 disabled={isFinalizingMarks || !route.examId}
-                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:opacity-50 ${
-                  showMarksImmediately ? 'bg-green-600 text-white hover:bg-green-500' : 'bg-gray-700 text-white hover:bg-gray-600'
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm disabled:opacity-50 transition-colors ${
+                  showMarksImmediately ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20' : 'border border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.06]'
                 }`}
               >
                 {showMarksImmediately ? <Eye size={14} /> : <EyeOff size={14} />}
-                {showMarksImmediately ? 'Results Visible' : 'Results Hidden'}
+                {showMarksImmediately ? 'Visible' : 'Hidden'}
               </button>
               <button
                 type="button"
                 onClick={handleFinalizeMarks}
                 disabled={isFinalizingMarks || !route.examId}
-                className="inline-flex items-center gap-2 rounded-md bg-[#ffa116] px-3 py-2 text-sm font-medium text-black hover:bg-orange-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-2 text-sm font-bold text-black shadow-lg shadow-amber-500/20 hover:brightness-110 disabled:opacity-50"
               >
                 {isFinalizingMarks ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                {isFinalizingMarks ? 'Saving...' : 'Finalize Marks'}
+                Finalize
               </button>
               <button
                 type="button"
                 onClick={() => setShowPublishPanel(true)}
                 disabled={!route.examId}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-50"
               >
                 <Share2 size={14} />
-                Select Students
+                Students
               </button>
               <div ref={reportMenuRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setIsReportMenuOpen((value) => !value)}
                   disabled={!route.examId || isDownloadingReport}
-                  className="inline-flex items-center gap-2 rounded-md bg-slate-700 px-3 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/60 hover:bg-white/[0.06] disabled:opacity-50"
                 >
                   {isDownloadingReport ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
-                  Download Report
+                  Report
                   <ChevronDown size={14} />
                 </button>
                 {isReportMenuOpen ? (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-md border border-white/10 bg-[#111] shadow-xl">
+                  <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-white/[0.08] bg-[#111113] shadow-2xl">
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsReportMenuOpen(false);
-                        void handleDownloadExamReport('pdf');
-                      }}
+                      onClick={() => { setIsReportMenuOpen(false); void handleDownloadExamReport('pdf'); }}
                       disabled={!route.examId || isDownloadingReport}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.04] disabled:opacity-50"
                     >
-                      <Download size={14} />
-                      PDF
+                      <Download size={14} /> PDF
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsReportMenuOpen(false);
-                        void handleDownloadExamReport('xlsx');
-                      }}
+                      onClick={() => { setIsReportMenuOpen(false); void handleDownloadExamReport('xlsx'); }}
                       disabled={!route.examId || isDownloadingReport}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.04] disabled:opacity-50"
                     >
-                      <FileSpreadsheet size={14} />
-                      Excel / Google Sheet
+                      <FileSpreadsheet size={14} /> Excel
                     </button>
                   </div>
                 ) : null}
@@ -811,14 +801,14 @@ function ResultsTab({
             />
           </div>
 
-          <div className="mt-4 rounded-lg border border-gray-800 bg-[#0a0a0a] p-4">
-            <p className="mb-4">Proctor Alerts</p>
-            <div className="flex max-h-64 flex-col gap-3 overflow-y-auto">
-              {proctorAlerts.length === 0 && <p className="text-gray-400">No alerts yet.</p>}
+          <div className="mt-4 rounded-2xl border border-white/[0.06] bg-[#111113] p-4">
+            <p className="mb-4 text-sm font-semibold text-white/70">Proctor Alerts</p>
+            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+              {proctorAlerts.length === 0 && <p className="py-4 text-center text-xs text-white/30">No alerts yet.</p>}
               {proctorAlerts.map((event, idx) => (
-                <div key={`${event?.studentId || 'student'}-${idx}`} className="rounded-md border border-gray-800 bg-[#111] p-3">
+                <div key={`${event?.studentId || 'student'}-${idx}`} className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
                   <p className="text-sm text-white">{event?.studentName || 'Student'}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-[11px] text-white/35">
                     {event?.type || 'violation'} · {event?.time || '-'}
                   </p>
                 </div>
@@ -829,12 +819,12 @@ function ResultsTab({
       ) : null}
 
           {showDeleteConfirm && pendingDeleteExam ? (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
-              <div className="w-full max-w-sm rounded-lg border border-white/15 bg-[#101010] p-4">
-                <h3 className="text-sm font-semibold text-white">Delete exam</h3>
-                <p className="mt-1 text-xs text-white/60">Do you really want to delete "{pendingDeleteExam.title}"? This will remove all attempts and submissions.</p>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button type="button" onClick={() => { setShowDeleteConfirm(false); setPendingDeleteExam(null); }} className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">No</button>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111113] p-6 shadow-2xl">
+                <h3 className="text-lg font-semibold text-white">Delete Exam</h3>
+                <p className="mt-2 text-sm text-white/60">Delete "{pendingDeleteExam.title}"? This removes all attempts and submissions.</p>
+                <div className="mt-5 flex justify-end gap-3">
+                  <button type="button" onClick={() => { setShowDeleteConfirm(false); setPendingDeleteExam(null); }} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-white/60 hover:bg-white/[0.06]">Cancel</button>
                   <button type="button" onClick={async () => {
                     try {
                       await deleteExam(pendingDeleteExam._id);
@@ -845,7 +835,7 @@ function ResultsTab({
                     } catch (err) {
                       toast.error(err.message || 'Unable to delete exam.');
                     }
-                  }} className="rounded-md border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30">Yes</button>
+                  }} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500">Delete</button>
                 </div>
               </div>
             </div>
@@ -862,22 +852,22 @@ function ResultsTab({
           ) : null}
 
           {pendingExamAction ? (
-            <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
-              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f0f0f] p-5 shadow-2xl shadow-black/40">
-                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Confirm action</p>
-                <h3 className="mt-2 text-lg font-semibold text-white">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#111113] p-6 shadow-2xl">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">Confirm Action</p>
+                <h3 className="mt-2 text-lg font-bold text-white">
                   {pendingExamAction === 'start' ? 'Start this exam?' : 'Stop this exam?'}
                 </h3>
-                <p className="mt-3 text-sm text-gray-400">
+                <p className="mt-3 text-sm text-white/50">
                   {pendingExamAction === 'start'
-                    ? 'Do you really need to start the exam now? Students will be able to begin once it is running.'
-                    : 'Do you really need to stop the exam now? This will end the session immediately for students.'}
+                    ? 'Students will be able to begin once the exam is running.'
+                    : 'This will end the session immediately for all students.'}
                 </p>
-                <div className="mt-5 flex justify-end gap-3">
+                <div className="mt-6 flex justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setPendingExamAction(null)}
-                    className="rounded-md border border-gray-700 bg-transparent px-4 py-2 text-sm text-gray-300 hover:bg-white/5"
+                    className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-white/60 hover:bg-white/[0.06]"
                   >
                     Cancel
                   </button>
@@ -888,11 +878,11 @@ function ResultsTab({
                       setPendingExamAction(null);
                       await runExamAction(action);
                     }}
-                    className={`rounded-md px-4 py-2 text-sm font-semibold text-black ${
+                    className={`rounded-xl px-4 py-2 text-sm font-bold text-black ${
                       pendingExamAction === 'start' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-red-500 hover:bg-red-400'
                     }`}
                   >
-                    {pendingExamAction === 'start' ? 'Yes, start exam' : 'Yes, stop exam'}
+                    {pendingExamAction === 'start' ? 'Yes, start' : 'Yes, stop'}
                   </button>
                 </div>
               </div>

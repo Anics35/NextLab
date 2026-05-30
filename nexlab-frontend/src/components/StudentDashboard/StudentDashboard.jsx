@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { BookOpen, GraduationCap, Sparkles } from 'lucide-react';
+import { GraduationCap, Sparkles } from 'lucide-react';
 import { getMyCourses, joinCourse } from '../../services/api';
 import JoinCourseForm from './JoinCourseForm';
 import CourseGrid from './CourseGrid';
@@ -51,7 +51,7 @@ function StudentDashboard({ activeCourseId, onSelectCourse }) {
   };
 
   return (
-    <section className="flex flex-col gap-6 p-2">
+    <section className="flex flex-col gap-5 p-2">
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-[#1a1a2e] via-[#16162a] to-[#0f0f1a] p-6">
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
@@ -59,20 +59,16 @@ function StudentDashboard({ activeCourseId, onSelectCourse }) {
         <div className="relative flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <GraduationCap size={20} className="text-amber-400" />
-              <span className="text-xs font-medium uppercase tracking-wider text-amber-400/80">Student Dashboard</span>
+              <GraduationCap size={18} className="text-amber-400" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-400/80">Student Dashboard</span>
             </div>
-            <h2 className="text-2xl font-bold text-white">My Courses</h2>
-            <p className="mt-1 text-sm text-white/50">Join a course with an invite code and access your exams.</p>
+            <h2 className="text-xl font-bold text-white">My Courses</h2>
+            <p className="mt-1 text-sm text-white/40">Join a course with an invite code and access your exams.</p>
           </div>
-          <div className="hidden sm:flex items-center gap-4">
+          <div className="hidden sm:flex items-center">
             <div className="flex flex-col items-center rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3">
               <span className="text-2xl font-bold text-white">{courses.length}</span>
-              <span className="text-[11px] text-white/40 mt-0.5">Courses</span>
-            </div>
-            <div className="flex flex-col items-center rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3">
-              <BookOpen size={20} className="text-indigo-400 mb-1" />
-              <span className="text-[11px] text-white/40">Active</span>
+              <span className="text-[10px] text-white/35 mt-0.5">Enrolled</span>
             </div>
           </div>
         </div>
@@ -82,7 +78,7 @@ function StudentDashboard({ activeCourseId, onSelectCourse }) {
       <div className="rounded-2xl border border-white/[0.06] bg-[#111113] p-5">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={14} className="text-amber-400" />
-          <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Join a New Course</span>
+          <span className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.12em]">Join a New Course</span>
         </div>
         <JoinCourseForm
           inviteCode={inviteCode}

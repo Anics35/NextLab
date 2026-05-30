@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getEnrolledStudents, updateExamVisibility } from '../../../services/api';
 import toast from 'react-hot-toast';
-import { X, Check, Users } from 'lucide-react';
+import { Check, LoaderCircle, Users, X } from 'lucide-react';
 
 function ExamPublishPanel({ examId, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -16,7 +16,6 @@ function ExamPublishPanel({ examId, onClose, onSuccess }) {
         const data = await getEnrolledStudents(examId);
         setEnrolledStudents(data.enrolledStudents || []);
         setVisibleToStudents(data.visibleToStudents || []);
-        // Check if all are already selected
         if (data.visibleToStudents?.length === data.enrolledStudents?.length) {
           setSelectAll(true);
         }
@@ -61,7 +60,7 @@ function ExamPublishPanel({ examId, onClose, onSuccess }) {
     setLoading(true);
     try {
       await updateExamVisibility(examId, visibleToStudents);
-      toast.success('Exam visibility updated successfully.');
+      toast.success('Exam visibility updated.');
       onSuccess?.();
       onClose?.();
     } catch (error) {
@@ -72,70 +71,80 @@ function ExamPublishPanel({ examId, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl w-full max-w-2xl max-h-96 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="flex max-h-[500px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111113] shadow-2xl">
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#ffa116]" />
-            <h2 className="text-lg font-semibold">Publish Exam to Students</h2>
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
+              <Users size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Publish to Students</h2>
+              <p className="text-xs text-white/40">Select which students can access this exam</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="rounded-xl p-2 text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
           >
-            <X className="w-5 h-5" />
+            <X size={18} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading && <p className="text-gray-400">Loading students...</p>}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+            </div>
+          )}
 
           {!loading && enrolledStudents.length === 0 && (
-            <p className="text-gray-400">No students enrolled in this course.</p>
+            <p className="py-12 text-center text-sm text-white/30">No students enrolled in this course.</p>
           )}
 
           {!loading && enrolledStudents.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {/* Select All Option */}
-              <div className="bg-[#111] border border-gray-800 rounded-md p-3 flex items-center gap-3">
-                <label className="flex items-center gap-3 cursor-pointer flex-1">
-                  <input
-                    type="checkbox"
-                    checked={selectAll}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 cursor-pointer accent-[#ffa116]"
-                  />
-                  <span className="font-medium">Select All Students</span>
-                </label>
-              </div>
+            <div className="space-y-2">
+              {/* Select All */}
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.04]">
+                <input
+                  type="checkbox"
+                  checked={selectAll}
+                  onChange={handleSelectAll}
+                  className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-500/30"
+                />
+                <span className="text-sm font-medium text-white">Select All Students</span>
+                <span className="ml-auto text-xs text-white/30">{enrolledStudents.length} total</span>
+              </label>
 
               {/* Student List */}
               {enrolledStudents.map((student) => {
                 const isSelected = visibleToStudents.some((sid) => String(sid) === String(student._id));
                 return (
-                  <div
+                  <label
                     key={student._id}
-                    className="bg-[#111] border border-gray-800 rounded-md p-3 flex items-center gap-3 hover:border-gray-700 transition-colors"
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all ${
+                      isSelected
+                        ? 'border-amber-500/20 bg-amber-500/5'
+                        : 'border-white/[0.04] bg-white/[0.01] hover:border-white/[0.08] hover:bg-white/[0.03]'
+                    }`}
                   >
-                    <label className="flex items-center gap-3 cursor-pointer flex-1">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleStudent(student._id)}
-                        className="w-4 h-4 cursor-pointer accent-[#ffa116]"
-                      />
-                      <div>
-                        <p className="font-medium text-white">{student.name}</p>
-                        <p className="text-sm text-gray-400">
-                          {student.rollNumber} · Semester {student.semester}
-                        </p>
-                      </div>
-                    </label>
-                    {isSelected && <Check className="w-4 h-4 text-[#ffa116]" />}
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleStudent(student._id)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-500/30"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white">{student.name}</p>
+                      <p className="text-[11px] text-white/35">
+                        {student.rollNumber} · Sem {student.semester}
+                      </p>
+                    </div>
+                    {isSelected && <Check size={14} className="shrink-0 text-amber-400" />}
+                  </label>
                 );
               })}
             </div>
@@ -143,23 +152,29 @@ function ExamPublishPanel({ examId, onClose, onSuccess }) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 p-4 flex justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 text-gray-300 hover:text-white bg-transparent border border-gray-700 rounded-md transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={loading || visibleToStudents.length === 0}
-            className="px-4 py-2 bg-[#ffa116] text-black font-semibold rounded-md hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? 'Publishing...' : 'Publish Exam'}
-          </button>
+        <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-4">
+          <p className="text-xs text-white/30">
+            Selected: <span className="font-semibold text-amber-400">{visibleToStudents.length}</span> of {enrolledStudents.length}
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-white/60 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={loading || visibleToStudents.length === 0}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2 text-sm font-bold text-black shadow-lg shadow-amber-500/20 transition-all hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
+            >
+              {loading ? <LoaderCircle size={14} className="animate-spin" /> : <Users size={14} />}
+              {loading ? 'Publishing...' : 'Publish'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

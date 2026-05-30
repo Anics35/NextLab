@@ -1,4 +1,4 @@
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Plus } from 'lucide-react';
 import { inputClass } from '../constants';
 
 function CourseForm({ courseForm, setCourseForm, onSubmit, isLoading, submitText = 'Create Course' }) {
@@ -6,8 +6,8 @@ function CourseForm({ courseForm, setCourseForm, onSubmit, isLoading, submitText
   const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
 
   return (
-    <div className="mb-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+    <div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-3">
         <input
           className={inputClass}
           value={courseForm.title}
@@ -18,7 +18,7 @@ function CourseForm({ courseForm, setCourseForm, onSubmit, isLoading, submitText
           className={inputClass}
           value={courseForm.courseCode}
           onChange={(event) => setCourseForm((prev) => ({ ...prev, courseCode: event.target.value.toUpperCase() }))}
-          placeholder="Course code"
+          placeholder="Course code (e.g. CS101)"
         />
         <select
           className={inputClass}
@@ -42,23 +42,23 @@ function CourseForm({ courseForm, setCourseForm, onSubmit, isLoading, submitText
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={isLoading}
-          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-500 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {isLoading ? <LoaderCircle size={14} className="animate-spin" /> : null}
-          {isLoading ? 'Creating...' : submitText}
-        </button>
       </div>
       <textarea
         className={`${inputClass} resize-none mb-4`}
         rows={3}
         value={courseForm.description}
         onChange={(event) => setCourseForm((prev) => ({ ...prev, description: event.target.value }))}
-        placeholder="Course description"
+        placeholder="Course description (optional)"
       />
+      <button
+        type="button"
+        onClick={onSubmit}
+        disabled={isLoading}
+        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:opacity-50"
+      >
+        {isLoading ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
+        {isLoading ? 'Creating...' : submitText}
+      </button>
     </div>
   );
 }

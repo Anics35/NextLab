@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { BookOpen, ClipboardList, Bell, BarChart3, Library } from 'lucide-react';
 import { getAuthToken, getStoredUser, logout } from '../../services/authService';
 import { getMyCourses, getCourseExams, getCourseById, createExam, deleteCourse, updateCourse, removeStudentFromCourse } from '../../services/api';
 import { getProblems } from '../../services/codeService';
@@ -13,6 +14,14 @@ import QuestionBankTab from './QuestionBank/QuestionBankTab';
 import ExamsTab from './ExamsTab';
 import NotificationsTab from './NotificationsTab';
 import ResultsTab from './Results/ResultsTab';
+
+const TAB_META = {
+  courses: { label: 'Courses', icon: BookOpen },
+  'question-bank': { label: 'Question Bank', icon: Library },
+  exams: { label: 'Exam Builder', icon: ClipboardList },
+  notifications: { label: 'Notifications', icon: Bell },
+  results: { label: 'Results', icon: BarChart3 }
+};
 
 const RESULT_BASE_HASH = '#/teacher/results';
 
@@ -39,7 +48,12 @@ function TeacherDashboard() {
   // Courses
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
-  const [selectedCourseId, setSelectedCourseId] = useState(() => getResultHashValue('course'));
+  const [selectedCourseId, setSelectedCourseId] = useState(() => {
+    const fromHash = getResultHashValue('course');
+    if (fromHash) return fromHash;
+    const saved = localStorage.getItem('nextlab_teacher_selected_course');
+    return saved || '';
+  });
   const [courseForm, setCourseForm] = useState(DEFAULT_COURSE_FORM);
   const [selectedCourseDetail, setSelectedCourseDetail] = useState(null);
   const [courseDetailLoading, setCourseDetailLoading] = useState(false);
@@ -99,6 +113,13 @@ function TeacherDashboard() {
       localStorage.setItem('nextlab_teacher_active_tab', activeTab);
     }, [activeTab]);
 
+    // Persist selected course to localStorage
+    useEffect(() => {
+      if (selectedCourseId) {
+        localStorage.setItem('nextlab_teacher_selected_course', selectedCourseId);
+      }
+    }, [selectedCourseId]);
+
   useEffect(() => {
     const handleHashChange = () => {
       if (isResultHash()) {
@@ -126,6 +147,7 @@ function TeacherDashboard() {
   const handleLogout = useCallback(() => {
     logout();
     localStorage.removeItem('nextlab_teacher_active_tab');
+    localStorage.removeItem('nextlab_teacher_selected_course');
   }, []);
 
   // Load workspace
@@ -252,31 +274,57 @@ function TeacherDashboard() {
   };
 
   const sidebar = (
-    <>
-      <div className="mb-4">
-        <p className="text-lg font-semibold">NextLab</p>
-        <p className="text-xs text-gray-400">Teacher Dashboard</p>
-      </div>
-      <div className="flex flex-col gap-4 mb-4">
+    <div className="flex h-full flex-col px-3 py-5">
+      {/* Navigation */}
+      <nav className="flex flex-col gap-1">
+        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">Navigation</p>
         {TABS.map((tab) => {
-          const label = tab === 'question-bank' ? 'Question Bank' : tab.charAt(0).toUpperCase() + tab.slice(1);
+          const meta = TAB_META[tab];
+          const Icon = meta?.icon;
+          const isActive = activeTab === tab;
           return (
             <button
               key={tab}
               type="button"
               onClick={() => handleSelectTab(tab)}
-              className={`text-left rounded-md px-3 py-2 border ${
-                activeTab === tab
-                  ? 'bg-[#ffa116] text-black border-[#ffa116]'
-                  : 'bg-[#111] text-white border-gray-800 hover:bg-[#1a1a1a]'
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? 'bg-amber-500/15 text-amber-400 shadow-sm shadow-amber-500/5'
+                  : 'text-white/60 hover:bg-white/[0.04] hover:text-white'
               }`}
             >
-              {label}
+              {Icon && (
+                <Icon
+                  size={18}
+                  className={`shrink-0 transition-colors ${
+                    isActive ? 'text-amber-400' : 'text-white/30 group-hover:text-white/60'
+                  }`}
+                />
+              )}
+              <span>{meta?.label || tab}</span>
+              {isActive && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400" />
+              )}
             </button>
           );
         })}
+      </nav>
+
+      {/* Stats footer */}
+      <div className="mt-auto pt-6 px-3">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-2">Workspace</p>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-white/50">Courses</span>
+            <span className="font-semibold text-white">{courses.length}</span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-xs">
+            <span className="text-white/50">Problems</span>
+            <span className="font-semibold text-white">{problems.length}</span>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 
   return (

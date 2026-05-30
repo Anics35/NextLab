@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { LoaderCircle } from 'lucide-react';
+import { Library, LoaderCircle, Plus } from 'lucide-react';
 import { createProblem, updateProblem, deleteProblem } from '../../../services/api';
 import { cardClass, DEFAULT_PROBLEM_FORM } from '../constants';
 import ProblemForm from './ProblemForm';
@@ -35,6 +35,7 @@ function QuestionBankTab({
   }, [difficultyFilter, problems, query]);
 
   const [confirmDeleteProblem, setConfirmDeleteProblem] = useState(null);
+  const [showForm, setShowForm] = useState(false);
 
   const handleCreateProblem = async () => {
     if (!problemForm.title.trim() || !problemForm.description.trim()) {
@@ -50,7 +51,6 @@ function QuestionBankTab({
         problemType: problemForm.problemType || 'testcase'
       };
 
-      // Only include test cases for testcase problems
       if (problemForm.problemType === 'testcase') {
         payload.publicTestCases = problemForm.publicTestCases.filter((item) => String(item.output || '').trim());
         payload.hiddenTestCases = problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim());
@@ -58,6 +58,7 @@ function QuestionBankTab({
 
       await createProblem(payload);
       setProblemForm(DEFAULT_PROBLEM_FORM);
+      setShowForm(false);
       toast.success('Problem created.');
       await onRefresh();
     } catch (error) {
@@ -86,7 +87,6 @@ function QuestionBankTab({
         problemType: problemForm.problemType || 'testcase'
       };
 
-      // Only include test cases for testcase problems
       if (problemForm.problemType === 'testcase') {
         payload.publicTestCases = problemForm.publicTestCases.filter((item) => String(item.output || '').trim());
         payload.hiddenTestCases = problemForm.hiddenTestCases.filter((item) => String(item.output || '').trim());
@@ -109,6 +109,7 @@ function QuestionBankTab({
 
   const handleEditProblem = (problem) => {
     setEditingProblemId(problem._id);
+    setShowForm(true);
     setProblemForm({
       title: problem.title || '',
       description: problem.description || '',
@@ -126,25 +127,58 @@ function QuestionBankTab({
   const resetProblemForm = () => {
     setProblemForm(DEFAULT_PROBLEM_FORM);
     setEditingProblemId('');
+    setShowForm(false);
   };
 
   return (
-    <section className={cardClass}>
-      <h2 className="text-lg font-semibold mb-4">Question Bank</h2>
-      <ProblemForm
-        problemForm={problemForm}
-        setProblemForm={setProblemForm}
-        onSubmit={editingProblemId ? handleUpdateProblem : handleCreateProblem}
-        isLoading={isCreatingProblem || isSavingProblem}
-        editingId={editingProblemId}
-        onCancel={resetProblemForm}
-      />
+    <section className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Library size={20} className="text-amber-400" />
+            Question Bank
+          </h2>
+          <p className="mt-1 text-sm text-white/40">Create and manage coding problems for your exams.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { resetProblemForm(); setShowForm(!showForm); }}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-500/20 transition-all hover:shadow-amber-500/30 hover:brightness-110"
+        >
+          <Plus size={16} />
+          New Problem
+        </button>
+      </div>
+
+      {/* Problem Form */}
+      {(showForm || editingProblemId) && (
+        <div className={cardClass}>
+          <h3 className="mb-4 text-sm font-semibold text-white/70 uppercase tracking-wide">
+            {editingProblemId ? 'Edit Problem' : 'Create New Problem'}
+          </h3>
+          <ProblemForm
+            problemForm={problemForm}
+            setProblemForm={setProblemForm}
+            onSubmit={editingProblemId ? handleUpdateProblem : handleCreateProblem}
+            isLoading={isCreatingProblem || isSavingProblem}
+            editingId={editingProblemId}
+            onCancel={resetProblemForm}
+          />
+        </div>
+      )}
+
+      {/* Search & Filter */}
       <ProblemSearch
         query={query}
         setQuery={setQuery}
         difficultyFilter={difficultyFilter}
         setDifficultyFilter={setDifficultyFilter}
+        totalCount={problems.length}
+        filteredCount={filteredProblems.length}
       />
+
+      {/* Problem List */}
       <ProblemList
         problems={filteredProblems}
         onEdit={handleEditProblem}
@@ -154,19 +188,19 @@ function QuestionBankTab({
 
       {/* Delete Problem Confirmation Modal */}
       {confirmDeleteProblem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#0a0a0a] p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111113] p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-white">Delete Problem</h3>
-            <p className="mt-2 text-gray-300">
-              Are you sure you want to delete <span className="font-semibold">{confirmDeleteProblem.title || 'Untitled'}</span>?
+            <p className="mt-2 text-sm text-white/60">
+              Delete <span className="font-semibold text-white">{confirmDeleteProblem.title || 'Untitled'}</span>?
             </p>
-            <p className="mt-3 text-sm text-gray-400">This action cannot be undone.</p>
-            <div className="mt-6 flex justify-end gap-3">
+            <p className="mt-2 text-xs text-white/30">This action cannot be undone.</p>
+            <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmDeleteProblem(null)}
                 disabled={isDeletingProblemId === confirmDeleteProblem._id}
-                className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+                className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-white/60 hover:bg-white/[0.06] disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -189,7 +223,7 @@ function QuestionBankTab({
                   }
                 }}
                 disabled={isDeletingProblemId === confirmDeleteProblem._id}
-                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
               >
                 {isDeletingProblemId === confirmDeleteProblem._id && <LoaderCircle size={16} className="animate-spin" />}
                 Delete
