@@ -28,7 +28,8 @@ async function downloadResultPdf(req, res, next) {
     const course = await Course.findById(exam.courseId);
     const isTeacher = course && String(course.teacherId) === req.user.id;
     const isSelf = req.user.id === studentId;
-    if (!isTeacher && !isSelf) {
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isTeacher && !isSelf && !isAdmin) {
       throw createApiError(403, "You cannot access this result", "FORBIDDEN");
     }
 
@@ -57,8 +58,9 @@ async function downloadExamReportPdf(req, res, next) {
 
     const course = await Course.findById(exam.courseId);
     const isTeacher = course && String(course.teacherId) === req.user.id;
-    if (!isTeacher) {
-      throw createApiError(403, "Only the course teacher can download the exam report", "FORBIDDEN");
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isTeacher && !isAdmin) {
+      throw createApiError(403, "Only the course teacher or an admin can download the exam report", "FORBIDDEN");
     }
 
     const submissions = await Submission.find({ examId })
@@ -91,8 +93,9 @@ async function downloadExamReportXlsx(req, res, next) {
 
     const course = await Course.findById(exam.courseId);
     const isTeacher = course && String(course.teacherId) === req.user.id;
-    if (!isTeacher) {
-      throw createApiError(403, "Only the course teacher can download the exam report", "FORBIDDEN");
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isTeacher && !isAdmin) {
+      throw createApiError(403, "Only the course teacher or an admin can download the exam report", "FORBIDDEN");
     }
 
     const submissions = await Submission.find({ examId })

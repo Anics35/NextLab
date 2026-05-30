@@ -10,8 +10,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
     name: user?.name || '',
     email: user?.email || '',
     rollNumber: user?.rollNumber || '',
-    semester: user?.semester || '',
-    phone: user?.phone || ''
+    semester: user?.semester || ''
   });
 
   useEffect(() => {
@@ -20,8 +19,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
         name: user.name || '',
         email: user.email || '',
         rollNumber: user.rollNumber || '',
-        semester: user.semester || '',
-        phone: user.phone || ''
+        semester: user.semester || ''
       });
     }
   }, [user]);
@@ -43,8 +41,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
       await updateProfile({
         name: formData.name.trim(),
         rollNumber: formData.rollNumber.trim(),
-        semester: formData.semester.trim(),
-        phone: formData.phone.trim()
+        semester: formData.semester.trim()
       });
       
       toast.success('Profile updated successfully.');
@@ -74,8 +71,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
       name: user?.name || '',
       email: user?.email || '',
       rollNumber: user?.rollNumber || '',
-      semester: user?.semester || '',
-      phone: user?.phone || ''
+      semester: user?.semester || ''
     });
     setIsEditing(false);
   };
@@ -171,19 +167,7 @@ function UserProfileModal({ user, onClose, onProfileUpdate }) {
               </div>
             )}
 
-            {/* Phone */}
-            <div>
-              <label className={labelClass}>Phone Number</label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                disabled={!isEditing}
-                className={`${inputClass} ${!isEditing ? 'bg-gray-900 cursor-not-allowed opacity-70' : ''}`}
-                placeholder="Enter phone number"
-              />
-            </div>
+            {/* Phone - REMOVED per user request */}
           </div>
 
           {/* Info Box */}

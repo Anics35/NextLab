@@ -225,4 +225,14 @@ export const downloadAdminReports = async () => {
   return response.data;
 };
 
+export const downloadAdminExamReportPdf = async (examId) => {
+  const response = await api.get(`/results/exam/${examId}/pdf`, { responseType: 'blob' });
+  return response.data;
+};
+
+export const downloadAdminExamReportXlsx = async (examId) => {
+  const response = await api.get(`/results/exam/${examId}/xlsx`, { responseType: 'blob' });
+  return response.data;
+};
+
 export default api;
