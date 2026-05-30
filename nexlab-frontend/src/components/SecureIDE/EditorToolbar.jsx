@@ -20,15 +20,17 @@ function EditorToolbar({ language, setLanguage, languageOptions, isRunning, onRu
       </select>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onRunCode?.()}
-          disabled={isRunning || effectiveLocked || isSubmitting}
-          className="inline-flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 disabled:opacity-50"
-        >
-          {isRunning ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} className="fill-current" />}
-          {isRunning ? 'Running...' : 'Run'}
-        </button>
+        {!isDesignProblem && (
+          <button
+            type="button"
+            onClick={() => onRunCode?.()}
+            disabled={isRunning || effectiveLocked || isSubmitting}
+            className="inline-flex items-center gap-2 rounded border border-white/15 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 disabled:opacity-50"
+          >
+            {isRunning ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} className="fill-current" />}
+            {isRunning ? 'Running...' : 'Run'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSubmit?.()}
