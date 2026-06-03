@@ -440,7 +440,7 @@ function App() {
     }
   };
 
-  const autoSubmitPendingProblems = useCallback(async () => {
+  const autoSubmitPendingProblems = useCallback(async ({ submitAllStates = false } = {}) => {
     if (!examId || !problems.length) return;
 
     let nextAttempt = null;
@@ -452,9 +452,10 @@ function App() {
       const state = problemStates[problemId] || buildProblemState(problem);
       const language = state.language || getDefaultLanguage();
       const ranCode = lastRunCodeMap[problemId];
-      if (!ranCode) continue;
+      const stateCode = state.code ?? getDefaultCode(problem, language);
+      if (!submitAllStates && !ranCode) continue;
 
-      const codeToSubmit = String(ranCode);
+      const codeToSubmit = String(submitAllStates ? stateCode : ranCode);
 
       try {
         const response = await submitExamAnswer({
@@ -482,8 +483,8 @@ function App() {
     setIsExamLocked(true);
 
     try {
-      if (trigger === 'timeout') {
-        await autoSubmitPendingProblems();
+      if (trigger === 'timeout' || trigger === 'manual') {
+        await autoSubmitPendingProblems({ submitAllStates: trigger === 'manual' });
       }
 
       const response = await finalizeExamAttempt(examId);
@@ -775,7 +776,6 @@ function App() {
                 remainingTime={remainingTime}
                 perProblemTimeLeft={currentPerProblemTimeLeft}
                 isPerProblemTimer={isPerProblemTimer}
-                submitExam={() => finalizeExamSession('manual')}
                 submitCurrentProblem={submitCurrentProblem}
                 setCurrentProblemIndex={setCurrentProblemIndex}
                 navigationControl={exam.navigationControl}
@@ -877,7 +877,7 @@ function App() {
             <p className="mt-2 text-gray-300">
               This exam is still ongoing. Do you want to submit and close it?
             </p>
-            <p className="mt-3 text-sm text-gray-400">Any unsaved changes will be lost.</p>
+            <p className="mt-3 text-sm text-gray-400">All current code states, including untouched problems, will be submitted before closing.</p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"

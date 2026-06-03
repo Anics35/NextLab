@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast, Toaster } from 'react-hot-toast';
-import { FileText, Maximize2, Minimize2, X } from 'lucide-react';
+import { FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { socket } from '../../services/socket';
 import {
   AUTO_SAVE_INTERVAL,
@@ -29,7 +29,6 @@ function SecureIDE({
   remainingTime = 0,
   perProblemTimeLeft = null,
   isPerProblemTimer = false,
-  submitExam,
   submitCurrentProblem,
   setCurrentProblemIndex,
   navigationControl = true,
@@ -330,14 +329,6 @@ function SecureIDE({
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
           >
             {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-          <button
-            type="button"
-            onClick={submitExam}
-            className="rounded-lg border border-gray-700/50 bg-gray-700/20 p-2 text-white/70 hover:bg-gray-700/40 transition-colors"
-            title="Close exam"
-          >
-            <X size={14} />
           </button>
         </div>
       </header>
