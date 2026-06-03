@@ -845,6 +845,12 @@ function App() {
                     <p className="mt-1 text-xs text-white/60">
                       {item.runtimeState === 'published' ? 'Waiting for teacher to start the exam.' : `Starts: ${new Date(item.startTime).toLocaleString()}`}
                     </p>
+                    {item.instructions?.trim() ? (
+                      <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Instructions</p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-white/80">{item.instructions}</p>
+                      </div>
+                    ) : null}
                     <p className="mt-1 text-xs text-white/60">Duration: {item.totalDuration} min</p>
                     <button
                       type="button"

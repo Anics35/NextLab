@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast, Toaster } from 'react-hot-toast';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { FileText, Maximize2, Minimize2, X } from 'lucide-react';
 import { socket } from '../../services/socket';
 import {
   AUTO_SAVE_INTERVAL,
@@ -66,6 +66,7 @@ function SecureIDE({
   const centerWidth = 100 - leftWidth - rightWidth;
   const problemTimerExpired = isPerProblemTimer && Number(perProblemTimeLeft) < 0;
   const effectiveLocked = isLocked || problemTimerExpired;
+  const examInstructions = typeof exam?.instructions === 'string' ? exam.instructions.trim() : '';
 
   // Update refs
   useEffect(() => {
@@ -304,10 +305,10 @@ function SecureIDE({
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-200 selection:bg-indigo-500/20">
+    <div className="flex h-screen flex-col bg-[#050505] text-gray-200 selection:bg-indigo-500/20">
       <Toaster position="top-center" />
 
-      <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#090909]/95 backdrop-blur px-6 flex items-center justify-between">
+      <header className="sticky top-0 z-50 h-16 shrink-0 border-b border-white/10 bg-[#090909]/95 backdrop-blur px-6 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-white">{exam?.title || 'Exam Workspace'}</h1>
           <p className="text-xs text-white/50">
@@ -341,7 +342,21 @@ function SecureIDE({
         </div>
       </header>
 
-      <main className="flex h-[calc(100vh-64px)] overflow-hidden">
+      {examInstructions ? (
+        <section className="shrink-0 border-b border-amber-500/20 bg-amber-500/10 px-6 py-3">
+          <div className="flex gap-3">
+            <FileText size={16} className="mt-0.5 shrink-0 text-amber-300" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Exam Instructions</p>
+              <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-words pr-2 text-sm leading-relaxed text-white/85">
+                {examInstructions}
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <main className="flex min-h-0 flex-1 overflow-hidden">
         <ProblemsPanel
           problems={problems}
           currentProblemIndex={currentProblemIndex}

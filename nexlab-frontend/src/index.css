@@ -1,8 +1,36 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
+
+/*
+  Windows Chrome/Edge render native <option> popup rows with a light
+  system background unless the option palette is explicitly declared.
+  Keep this global so every existing dropdown inherits the same dark UI
+  without changing component behavior.
+*/
+:root {
+	color-scheme: dark;
+}
+
+select {
+	color-scheme: dark;
+}
+
+select option,
+select optgroup {
+	background-color: #111113;
+	color: #f8fafc;
+}
+
+select option:checked {
+	background-color: #d97706;
+	color: #ffffff;
+}
+
+select option:disabled {
+	color: rgba(248, 250, 252, 0.45);
+}
 
 /* Monaco editor error line highlight used by SecureIDE */
 .my-error-line {
 	background-color: rgba(239, 68, 68, 0.12) !important;
 	border-left: 3px solid rgba(239, 68, 68, 0.85) !important;
 }
-
