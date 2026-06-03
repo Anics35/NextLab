@@ -4,4 +4,7 @@ dist/
 build/
 *.log
 FINAL_YEAR_PROJECT_REPORT.md
+FINAL_YEAR_PROJECT_REPORT.tex
 .claude
+project_daigrams/
+Testings/
