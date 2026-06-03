@@ -20,6 +20,7 @@ const getBreakdown = (students = []) => {
 
 function CourseCard({ course, onSelect }) {
   const breakdown = getBreakdown(course.students || []);
+  const description = course.description?.trim();
 
   const handleCopyInvite = (e) => {
     e.stopPropagation();
@@ -50,6 +51,12 @@ function CourseCard({ course, onSelect }) {
           </div>
         </div>
       </div>
+
+      {description ? (
+        <p className="mt-4 line-clamp-2 min-h-9 text-xs leading-relaxed text-white/45">{description}</p>
+      ) : (
+        <p className="mt-4 min-h-9 text-xs italic leading-relaxed text-white/25">No description added.</p>
+      )}
 
       {/* Invite code */}
       <div className="mt-4 flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/[0.06] px-3 py-2">

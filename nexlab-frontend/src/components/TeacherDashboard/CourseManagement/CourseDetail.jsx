@@ -20,6 +20,7 @@ function CourseDetail({
   const [confirmRemoveStudent, setConfirmRemoveStudent] = useState(null);
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
+  const courseDescription = selectedCourseDetail?.description?.trim();
 
   return (
     <section className="space-y-6">
@@ -91,6 +92,15 @@ function CourseDetail({
                 <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1">Students Enrolled</p>
                 <p className="text-2xl font-bold text-white">{selectedCourseDetail?.students?.length || 0}</p>
               </div>
+            </div>
+
+            <div className={cardClass}>
+              <p className="text-[10px] uppercase tracking-wider text-white/30 mb-2">Course Description</p>
+              {courseDescription ? (
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/70">{courseDescription}</p>
+              ) : (
+                <p className="text-sm italic text-white/30">No course description has been added yet.</p>
+              )}
             </div>
 
             {/* Edit Form */}
